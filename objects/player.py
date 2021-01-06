@@ -1,50 +1,17 @@
 import time
+from objects.const import Privileges, ClientPrivileges
 from enum import IntEnum, IntFlag, unique
 
 @unique
 class UserIDS(IntEnum):
-	BANCHO_AUTH_FAILED = -1
-	OLD_CLIENT = -2
-	BANNED = -3
-	BANNED2 = -4
-	ERROR_OCCURED = -5
-	NEEDS_SUPPORTER = -6
-	PASSWORD_RESET = -7
-	REQUIRES_VERIFICATION = -8
-
-@unique
-class Privileges(IntFlag):
-	"""Server side user privileges."""
-
-	Normal      = 1 << 0
-	Verified    = 1 << 1
-
-	Whitelisted = 1 << 2
-
-	Supporter   = 1 << 4
-	Premium     = 1 << 5
-
-	Alumni      = 1 << 7
-
-	Tournament  = 1 << 10
-	Nominator   = 1 << 11
-	Mod         = 1 << 12
-	Admin       = 1 << 13
-	Dangerous   = 1 << 14
-
-	Donator = Supporter | Premium
-	Staff = Mod | Admin | Dangerous
-
-@unique
-class ClientPrivileges(IntFlag):
-	"""Client side user privileges."""
-
-	Player     = 1 << 0
-	Moderator  = 1 << 1
-	Supporter  = 1 << 2
-	Owner      = 1 << 3
-	Developer  = 1 << 4
-	Tournament = 1 << 5
+    BANCHO_AUTH_FAILED = -1
+    OLD_CLIENT = -2
+    BANNED = -3
+    BANNED2 = -4
+    ERROR_OCCURED = -5
+    NEEDS_SUPPORTER = -6
+    PASSWORD_RESET = -7
+    REQUIRES_VERIFICATION = -8
 
 @unique
 class Mods(IntFlag):
@@ -123,13 +90,75 @@ class Mods(IntFlag):
             self &= ~Mods.DOUBLETIME
             return ''.join(v for k, v in _mod_dict.items() if self & k)
 
+@unique
+class GameMode(IntEnum):
+    vn_std   = 0
+    vn_taiko = 1
+    vn_catch = 2
+    vn_mania = 3
+
+    rx_std   = 4
+    rx_taiko = 5
+    rx_catch = 6
+
+    ap_std   = 7
+
+@unique
+class Action(IntEnum):
+    """The client's current state."""
+    Idle         = 0
+    Afk          = 1
+    Playing      = 2
+    Editing      = 3
+    Modding      = 4
+    Multiplayer  = 5
+    Watching     = 6
+    Unknown      = 7
+    Testing      = 8
+    Submitting   = 9
+    Paused       = 10
+    Lobby        = 11
+    Multiplaying = 12
+    OsuDirect    = 13
+
+class Stats:
+    def __init__(self, userID: int) -> None:
+        ...
+
 class Player:
     def __init__(self, userID: int, version: float, hardwareData: list, loginTime: float) -> None:
-        username: str = ''
+        self.username: str = 'owo' # soon
         self.userid = userID
         self.version = version
         self.hardwareData = hardwareData
         loginTime = loginTime
-    
+
+        self._privileges = 1 # raw priv number
+        self.privileges = Privileges(self._privileges)
+        self.utc_offset: int = 0
+        self.country = (0, 'XX')
+        self.location = (0.0, 0.0)
+        self.stats = Stats(userID)
+
+        self.action = Action.Idle
+        self.info_text = ''
+        self.map_md5 = ''
+        self.mods = Mods.NOMOD
+        self.mode = GameMode.rx_std
+        self.map_id = 0
+
+        self.queue = [] # this is when the client wants to get other player's info or whatever
+
+    @property
+    def banco_privs(self):
+        p = ClientPrivileges(0) # gets a normal player privs
+        if self.privileges & Privileges.Normal: # check if they have normal perms
+            # we check if its a normal player because we want
+            # too give the user free supporter features
+            # like direct
+            p |= (ClientPrivileges.Player | ClientPrivileges.Supporter)
+
+        return p
+
     def update(self):
         ...

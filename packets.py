@@ -8,6 +8,7 @@ from enum import IntEnum
 import struct
 from functools import lru_cache
 from typing import Union
+from objects.player import Player
 
 """
 Packets from the client and the server sending them are
@@ -227,31 +228,31 @@ def logout(userID: int) -> bytes:
 		PacketIDS.CHO_USER_LOGOUT, (userID, 'int'), (0, 'unB')
 	)
 
-# def userStats(p: 'Player') -> bytes:
-# 	return write(
-# 		PacketIDS.CHO_USER_STATS, 
-# 		(p.userid, 'int'), (p.action, 'b'),
-# 		(p.info_text, 'string'), (p.map_md5, 'string'),
-# 		(p.mods, 'int'), (p.mode, 'unB'),
-# 		(p.map_id, 'int'), (p.stats.ranked_score, 'long_long'),
-# 		(p.stats.acc / 100.0, 'float'), (p.stats.playcount, 'int'),
-# 		(p.stats.total_score, 'long_long'), (p.stats.rank, 'int'),
-# 		(p.stats.pp, 'short')
-# 	)
-# 
-# def userPresence(p: 'Player') -> bytes:
-# 	return write(
-# 		PacketIDS.CHO_USER_PRESENCE,
-# 		(p.userid, 'int'), (p.username, 'string'),
-# 		(p.utc_offset + 24, 'unB'), (p.country[0], 'unB'),
-# 		(p.priv | p.mode << 5, 'unB'), (p.location[0], 'float'),
-# 		(p.location[1], 'float'), (p.stats.rank, 'int')
-# 	)
-# 
-# def banchoPrivs(p: 'Player') -> bytes:
-# 	return write(
-# 		PacketIDS.CHO_PRIVILEGES, (p.priv, 'unB')
-# 	)
+def userStats(p: 'Player') -> bytes:
+	return write(
+		PacketIDS.CHO_USER_STATS, 
+		(p.userid, 'int'), (p.action, 'b'),
+		(p.info_text, 'string'), (p.map_md5, 'string'),
+		(p.mods, 'int'), (p.mode, 'unB'),
+		(p.map_id, 'int'), (p.stats.ranked_score, 'long_long'),
+		(p.stats.acc / 100.0, 'float'), (p.stats.playcount, 'int'),
+		(p.stats.total_score, 'long_long'), (p.stats.rank, 'int'),
+		(p.stats.pp, 'short')
+	)
+
+def userPresence(p: 'Player') -> bytes:
+	return write(
+		PacketIDS.CHO_USER_PRESENCE,
+		(p.userid, 'int'), (p.username, 'string'),
+		(p.utc_offset + 24, 'unB'), (p.country[0], 'unB'),
+		(p.banco_privs | p.mode << 5, 'unB'), (p.location[0], 'float'),
+		(p.location[1], 'float'), (1, 'int') # p.stats.rank
+	)
+
+def banchoPrivs(p: 'Player') -> bytes:
+	return write(
+		PacketIDS.CHO_PRIVILEGES, (p.banco_privs, 'unB')
+	)
 
 def notification(msg: str) -> bytes:
 	return write(
@@ -269,3 +270,14 @@ def protocolVersion(i: int = 19):
 	return write(
 		PacketIDS.CHO_PROTOCOL_VERSION, (i, 'int')
 	)
+
+def channelInfoEnd() -> bytes:
+	return write(
+		PacketIDS.CHO_CHANNEL_INFO_END
+	)
+
+def write_channel(name: str, topic: str, count: int) -> bytes:
+	body = write_string(name)
+	body += write_string(topic)
+	body += write_int(count)
+	return body

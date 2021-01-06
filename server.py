@@ -30,10 +30,10 @@ async def ava(conn: Connection) -> bytes:
 
     if os.path.exists(f'./data/avatars/{userid}.png'):
         async with aiofiles.open(f'./data/avatars/{userid}.png', 'rb') as f:
-            pfp = f.read()
+            pfp = await f.read()
     else:
         async with aiofiles.open(f'./data/avatars/-1.png', 'rb') as f:
-            pfp = f.read()
+            pfp = await f.read()
     
     conn.set_body(pfp)
     return conn.response
@@ -70,16 +70,30 @@ async def login(conn: Connection) -> bytes:
     else:
         body += packets.userID(userid) # give correct userid
     
-    cache.online[userid] = Player(
+    p = Player(
         userid, credentials[2], credentials[5], time.time()
     ) 
     
     body += packets.menuIcon('|'.join(config.menuicon))
     body += packets.notification(loginMsg.format(len(cache.online)))
     body += packets.protocolVersion()
-
-    #TODO: channels, privs
+    body += packets.banchoPrivs(p)
+    body += packets.channelInfoEnd()
     
+    for c in cache.channels:
+        if not p.privileges & c[3]: # check if player is allowed to see channels privs 
+            continue
+            
+        body += packets.channelJoin(c[0])
+        body += packets.channelInfo(c[0], c[1], c[2])
+
+    #TODO: channels
+    
+    body += packets.userPresence(p)
+    # body += packets.userStats(p)
+    for x in cache.online: body += packets.userPresence(x) + packets.userStats(x)
+    cache.online[userid] = p
+
     conn.set_status(200)
     conn.add_header('cho-token', userid)
     conn.set_body(body)
