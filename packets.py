@@ -222,6 +222,11 @@ def userID(i: int) -> bytes:
 		PacketIDS.CHO_USER_ID, (i, f"{'unI' if i > 0 else 'int'}")
 	)
 
+def logout(userID: int) -> bytes:
+	return write(
+		PacketIDS.CHO_USER_LOGOUT, (userID, 'int'), (0, 'unB')
+	)
+
 # def userStats(p: 'Player') -> bytes:
 # 	return write(
 # 		PacketIDS.CHO_USER_STATS, 
@@ -257,4 +262,10 @@ def notification(msg: str) -> bytes:
 def menuIcon(icon: str) -> bytes:
 	return write(
 		PacketIDS.CHO_MAIN_MENU_ICON, (icon, 'string')
+	)
+
+@lru_cache(maxsize=1)
+def protocolVersion(i: int = 19):
+	return write(
+		PacketIDS.CHO_PROTOCOL_VERSION, (i, 'int')
 	)

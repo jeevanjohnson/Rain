@@ -1,0 +1,3 @@
+online = {}
+beatmap = {}
+direct = {}

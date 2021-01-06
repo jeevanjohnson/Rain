@@ -1,43 +1,90 @@
-from typing import Union
-from WebLamp import Lamp, Connection
-from WebLamp.utlies import printc, Colors
+from WebLamp import Connection
+from serverwrapper import OsuServer
 from packets import PacketIDS
+from typing import Union
+from objects.player import Player
+import packets
+import config
+import os
+import cache
+import aiofiles
+import aiotinydb
+import time
 
-class OsuServer:
-    def __init__(self) -> None:
-        self.server = Lamp()
-        self.handlers = {}
+s = OsuServer()
+bancho = ("c.ppy.sh", "c4.ppy.sh", "c5.ppy.sh", "c6.ppy.sh")
+web = ["osu.ppy.sh"]
+avatar = ["a.ppy.sh"]
+
+loginMsg = '\n'.join([
+    " Welcome to Rain!", # cursed
+    "This was made for the sole purpose of learning how to make a server.",
+    "if your here welcome and enjoy your time.",
+    "There are currently {} online users"
+])
+
+@s.handler(target = r'^/(?P<userid>[0-9]*)$', domains = avatar)
+async def ava(conn: Connection) -> bytes:
+    conn.set_status(200)
+    userid = int(conn.args['userid'])
+
+    if os.path.exists(f'./data/avatars/{userid}.png'):
+        async with aiofiles.open(f'./data/avatars/{userid}.png', 'rb') as f:
+            pfp = f.read()
+    else:
+        async with aiofiles.open(f'./data/avatars/-1.png', 'rb') as f:
+            pfp = f.read()
     
-    def handler(self, target, domains, method):
-        def inner(func):
-            
-            if not isinstance(target, str) or target == 'banchologin':
-                self.handlers[target] = func
+    conn.set_body(pfp)
+    return conn.response
 
-            p = target if isinstance(target, str) else '/'
-            if isinstance(target, str) and target != 'banchologin':
-                for domain in domains:
-                    @self.server.route(route = p, domain = domain, method = method)
-                    async def ff(conn: Connection) -> bytes:
-                        return await func(conn)
-            else:
-                for domain in domains:
-                    @self.server.route(route = '/', domain = domain, method = method)
-                    async def ff(conn: Connection) -> bytes:
-                        if 'osu-token' not in conn.request:
-                            f = self.handlers['banchologin']
-                        else:
-                            t = PacketIDS(conn.request['body'][0]) # read first byte in body
-                            if t not in self.handlers:
-                                printc(f'Unhandled Request: {t.name}', Colors.Red)
-                                return b'error: :c'
-                            else:
-                                f = self.handlers[t] # get handler for packet
+@s.handler(target = PacketIDS.OSU_LOGOUT, domains = bancho)
+async def logout(conn: Connection, p: Union[Player, bool]) -> bytes:
+    conn.set_status(200)
+    if p:
+        del cache.online[p.userid]
+        conn.set_body(packets.logout(p.userid))
+    return conn.response
 
-                        return await f(conn)
+@s.handler(target = 'banchologin', domains = bancho)
+async def login(conn: Connection) -> bytes:
+    body = b''
+    userid = -1
+    # Getting all password details
+    credentials = conn.request['body'].decode().replace('\n', '|').split('|', 5)
+    credentials[2] = float(credentials[2][1:])
+    credentials[5] = credentials[5].replace('|', ':').split(':')
 
-            return func
-        return inner
+    # 0 username
+    # 1 password (hashed in md5)
+    # 2 game version
+    # 3 ?
+    # 4 ?
+    # 5 hardware data
 
-    def run(self, socket_type: Union[str, tuple] = ("127.0.0.1", 5000)):
-        self.server.run(socket_type)
+    userid = 3
+
+    # Check credentials to see if anything is wrong
+    if not credentials[0]: # this would check db but we are not at this part yet
+        ... # will do eventually
+    else:
+        body += packets.userID(userid) # give correct userid
+    
+    cache.online[userid] = Player(
+        userid, credentials[2], credentials[5], time.time()
+    ) 
+    
+    body += packets.menuIcon('|'.join(config.menuicon))
+    body += packets.notification(loginMsg.format(len(cache.online)))
+    body += packets.protocolVersion()
+
+    #TODO: channels, privs
+    
+    conn.set_status(200)
+    conn.add_header('cho-token', userid)
+    conn.set_body(body)
+    
+    return conn.response
+
+def run(socket_type: Union[str, tuple] = ("127.0.0.1", 5000)):
+    s.run(socket_type)
