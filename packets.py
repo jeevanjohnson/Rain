@@ -256,7 +256,7 @@ def banchoPrivs(p: 'Player') -> bytes:
 
 def notification(msg: str) -> bytes:
 	return write(
-		PacketIDS.CHO_NOTIFICATION, (msg, 'string')
+		PacketIDS.CHO_NOTIFICATION, (' ' + msg, 'string')
 	)
 
 @lru_cache(maxsize=1)
@@ -274,6 +274,16 @@ def protocolVersion(i: int = 19):
 def channelInfoEnd() -> bytes:
 	return write(
 		PacketIDS.CHO_CHANNEL_INFO_END
+	)
+
+def systemRestart(ms: int = 1) -> bytes:
+	return write(
+		PacketIDS.CHO_RESTART, (ms, 'int')
+	)
+
+def pong() -> bytes:
+	return write(
+		PacketIDS.CHO_PONG
 	)
 
 def write_channel(name: str, topic: str, count: int) -> bytes:
