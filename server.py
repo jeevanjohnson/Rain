@@ -30,7 +30,7 @@ avatar = ["a.ppy.sh"]
 DIRECT_API = "https://beatconnect.io/api"
 
 loginMsg = '\n'.join([
-    "Welcome to Rain!", # cursed
+    "Welcome to Rain!",
     "",
     "This was made for the sole purpose of learning how to make a server.",
     "if your here welcome and enjoy your time.",
@@ -155,6 +155,15 @@ async def accountCreation(conn: Connection) -> bytes:
     conn.set_body(body)
     return conn.response
 
+@s.handler(target = '/web/osu-submit-modular-selector.php', domains = web)
+async def scoreSub(conn: Connection) -> bytes:
+    # When osu sends 'replay bytes'
+    # it doesn't actually send replay bytes
+    # it sends cursor movements or frames as a proper word
+    print()
+    
+    return b''
+
 @s.handler(target = '/web/osu-osz2-getscores.php', domains = web)
 async def leaderboard(conn: Connection) -> bytes:
     conn.set_status(200)
@@ -178,11 +187,11 @@ async def leaderboard(conn: Connection) -> bytes:
     
     lb = []
     if filename in cache.beatmap:
-        m = cache.beatmap[filename]
+        m = cache.beatmap[map_md5]
         lb.append(f'{m.rankedstatus}|false')
     elif (m := await Beatmap.from_md5_to_api(map_md5)):
         lb.append(f'{m.rankedstatus}|false')
-        cache.beatmap[filename] = m
+        cache.beatmap[map_md5] = m
     else:
         lb.append(f'{ServerRankedStatus.Pending}|false')
     
@@ -231,6 +240,25 @@ async def direct(conn: Connection) -> bytes:
     conn.set_status(200)
     conn.set_body('\n'.join(maps).encode())
     return conn.response
+
+@s.handler(target = PacketIDS.OSU_RECEIVE_UPDATES, domains = bancho)
+async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
+    conn.set_status(200)
+    if not p:
+        body = b''
+        body += packets.notification('Server restarting!') 
+        body += packets.systemRestart()
+        conn.set_body(body)
+        return conn.response
+    if p.enqueue:
+        body = b''
+        for x in p.enqueue:
+            body += x
+        conn.set_body(body)
+        return conn.response #TODO don't return
+    
+    printc(PacketIDS.OSU_RECEIVE_UPDATES.name, Colors.Red)
+    return b''
 
 @s.handler(target = PacketIDS.OSU_REQUEST_STATUS_UPDATE, domains = bancho)
 async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
@@ -321,7 +349,7 @@ async def ava(conn: Connection) -> bytes:
 @s.handler(target = PacketIDS.OSU_PING, domains = bancho)
 async def pong(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_status(200)
-    conn.set_body(packets.pong())
+    conn.set_body(b'')
     return conn.response
 
 @s.handler(target = PacketIDS.OSU_LOGOUT, domains = bancho)
@@ -373,6 +401,7 @@ async def login(conn: Connection) -> bytes:
     await p.update()
     
     body += packets.menuIcon('|'.join(config.menuicon))
+    body += packets.notification(loginMsg.format(len(cache.online) + 1))
     body += packets.protocolVersion()
     body += packets.banchoPrivs(p)
     body += packets.userStats(p)
@@ -390,7 +419,7 @@ async def login(conn: Connection) -> bytes:
     
     body += packets.userStats(p)
     for x in cache.online: 
-        body += packets.userPresence(x) + packets.userStats(x)
+        body += packets.userPresence(cache.online[x]) + packets.userStats(cache.online[x])
     cache.online[userid] = p
 
     conn.set_status(200)
