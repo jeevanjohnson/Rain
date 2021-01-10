@@ -1,10 +1,11 @@
+from objects.beatmap import Beatmap
 from WebLamp import Connection, printc
 from WebLamp.utlies import Colors
 from serverwrapper import OsuServer
 from packets import PacketIDS
 from typing import Union
 from objects.player import Player
-from objects.const import GameMode, Mods, RankedStatus, RankingType, UserIDS
+from objects.const import GameMode, Mods, RankedStatus, RankingType, ServerRankedStatus, UserIDS
 from helpers import USERS, SCORES, BEATMAPS
 from functools import lru_cache
 import aiohttp
@@ -12,7 +13,6 @@ import packets
 import config
 import os
 import cache
-import aiofiles
 import time
 import hashlib 
 import re
@@ -168,7 +168,7 @@ async def leaderboard(conn: Connection) -> bytes:
     mode = GameMode.from_params(int(params['m']), mods)
     map_set_id = int(params['i'])
     rank_type = RankingType(int(params['v']))
-    filename = params['f'].replace('+', ' ')
+    filename = params['f'].replace('+', ' ').replace('%5b', '').replace('%5d', '')
 
     if p.mode != mode:
         p.mode = mode
@@ -176,9 +176,18 @@ async def leaderboard(conn: Connection) -> bytes:
         p.enqueue.append(packets.userStats(p))
         p.enqueue.append(packets.userPresence(p))
     
-    url = 
-
-    print()
+    lb = []
+    if filename in cache.beatmap:
+        m = cache.beatmap[filename]
+        lb.append(f'{m.rankedstatus}|false')
+    elif (m := await Beatmap.from_md5_to_api(map_md5)):
+        lb.append(f'{m.rankedstatus}|false')
+        cache.beatmap[filename] = m
+    else:
+        lb.append(f'{ServerRankedStatus.Pending}|false')
+    
+    conn.set_body('\n'.join(lb).encode())
+    return conn.response
 
 @s.handler(target = '/web/osu-search.php', domains = web)
 async def direct(conn: Connection) -> bytes:
@@ -300,11 +309,11 @@ async def ava(conn: Connection) -> bytes:
     userid = int(conn.args['userid'])
 
     if os.path.exists(f'./data/avatars/{userid}.png'):
-        async with aiofiles.open(f'./data/avatars/{userid}.png', 'rb') as f:
-            pfp = await f.read()
+        with open(f'./data/avatars/{userid}.png', 'rb') as f:
+            pfp = f.read()
     else:
-        async with aiofiles.open(f'./data/avatars/-1.png', 'rb') as f:
-            pfp = await f.read()
+        with open(f'./data/avatars/-1.png', 'rb') as f:
+            pfp = f.read()
     
     conn.set_body(pfp)
     return conn.response
@@ -364,24 +373,24 @@ async def login(conn: Connection) -> bytes:
     await p.update()
     
     body += packets.menuIcon('|'.join(config.menuicon))
-    body += packets.notification(loginMsg.format(len(cache.online) + 1))
     body += packets.protocolVersion()
     body += packets.banchoPrivs(p)
     body += packets.userStats(p)
     body += packets.userPresence(p)
-    # body += packets.channelInfoEnd()
+    body += packets.channelStart()
     
-    # for c in cache.channels:
-    #     if not p.privileges & c[3]: # check if player is allowed to see channels privs 
-    #         continue
-    #         
-    #     body += packets.channelJoin(c[0])
-    #     body += packets.channelInfo(c[0], c[1], c[2])
-
+    for c in cache.channels:
+        if not p.privileges & c[3]: # check if player is allowed to see channels privs 
+            continue
+            
+        body += packets.channelJoin(c[0])
+        body += packets.channelInfo(c[0], c[1], c[2])
+    
     #TODO: channels
     
-    # body += packets.userStats(p)
-    #for x in cache.online: body += packets.userPresence(x) + packets.userStats(x)
+    body += packets.userStats(p)
+    for x in cache.online: 
+        body += packets.userPresence(x) + packets.userStats(x)
     cache.online[userid] = p
 
     conn.set_status(200)

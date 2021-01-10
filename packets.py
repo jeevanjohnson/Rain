@@ -138,15 +138,24 @@ class PacketIDS(IntEnum):
 	OSU_TOURNAMENT_JOIN_MATCH_CHANNEL = 108
 	OSU_TOURNAMENT_LEAVE_MATCH_CHANNEL = 109
 
-def length_of_bytes(content: bytes) -> bytes:
-	length = b''
-	while content:
-		length += bytes([len(content[:255])])
-		content = content[255:]
-	return length
+def write_uleb128(num: int) -> bytes:
+    if num == 0:
+        return bytearray(b'\x00')
+
+    ret = bytearray()
+    length = 0
+
+    while num > 0:
+        ret.append(num & 0b01111111)
+        num >>= 7
+        if num != 0:
+            ret[length] |= 0b10000000
+        length += 1
+
+    return bytes(ret)
 
 def write_string(string: str) -> bytes:
-	return b'\x0b' + length_of_bytes(string.encode()) + string.encode()
+	return b'\x0b' + write_uleb128(len(string.encode())) + string.encode()
 
 def write_int(i: int) -> bytes:
 	return struct.pack('<i', i)
@@ -196,8 +205,8 @@ def write(packetid: int, *args) -> bytes:
 			p[2] += struct.pack(f'<{_type}', ctx)
 	
 	"""Adding size"""
-	p[1] = length_of_bytes(p[2]) + b'\x00\x00\x00'
-
+	p[1] = struct.pack('<I', len(p[2]))	
+	
 	return b''.join(p)
 
 def read_packet(data: bytes):
@@ -210,7 +219,7 @@ def channelStart():
 def channelInfo(name: str, topic: str, Pcount: int):
 	return write(
 		PacketIDS.CHO_CHANNEL_INFO, 
-		(name, 'string'), (topic, 'string'), (Pcount, 'unB')
+		(name, 'string'), (topic, 'string'), (Pcount, 'short')
 	)
 
 def channelJoin(name: str) -> bytes:
@@ -251,12 +260,12 @@ def userPresence(p: 'Player') -> bytes:
 
 def banchoPrivs(p: 'Player') -> bytes:
 	return write(
-		PacketIDS.CHO_PRIVILEGES, (p.banco_privs, 'unB')
+		PacketIDS.CHO_PRIVILEGES, (p.banco_privs, 'int')
 	)
 
 def notification(msg: str) -> bytes:
 	return write(
-		PacketIDS.CHO_NOTIFICATION, (' ' + msg, 'string')
+		PacketIDS.CHO_NOTIFICATION, (msg, 'string')
 	)
 
 @lru_cache(maxsize=1)
@@ -269,11 +278,6 @@ def menuIcon(icon: str) -> bytes:
 def protocolVersion(i: int = 19):
 	return write(
 		PacketIDS.CHO_PROTOCOL_VERSION, (i, 'int')
-	)
-
-def channelInfoEnd() -> bytes:
-	return write(
-		PacketIDS.CHO_CHANNEL_INFO_END
 	)
 
 def systemRestart(ms: int = 1) -> bytes:

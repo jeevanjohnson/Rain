@@ -132,16 +132,37 @@ class Mods(IntFlag):
             return ''.join(v for k, v in _mod_dict.items() if self & k)
 
 @unique
-class RankedStatus(IntEnum):
-    Ranked = 0
-    Ranked2 = 7
-    Loved = 8
-    Qualified = 3
-    Pending = 2
-    Graveyard = 5
+class ServerRankedStatus(IntEnum):
+    NotSubmitted = -1
+    Pending = 0
+    UpdateAvailable = 1
+    Ranked = 2
+    Approved = 3
+    Qualified = 4
+    Loved = 5
 
     @staticmethod
-    def to_api(status):
+    def from_api(status: int):
+        return {
+            -2: ServerRankedStatus.Pending,
+            0: ServerRankedStatus.Ranked,
+            1: ServerRankedStatus.Ranked,
+            2: ServerRankedStatus.Approved,
+            3: ServerRankedStatus.Qualified,
+            4: ServerRankedStatus.Loved,
+        }[status]
+
+@unique
+class RankedStatus(IntEnum):
+    Ranked = 0
+    Pending = 2
+    Qualified = 3
+    Graveyard = 5
+    Ranked2 = 7
+    Loved = 8
+
+    @staticmethod
+    def to_api(status: int):
         return {
             0: 'ranked',
             2: 'unranked',
