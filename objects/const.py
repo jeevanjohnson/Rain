@@ -1,6 +1,14 @@
 from enum import IntEnum, IntFlag, unique
 
 @unique
+class RankingType(IntEnum):
+    Local   = 0
+    Top     = 1
+    Mods    = 2
+    Friends = 3
+    Country = 4
+
+@unique
 class Privileges(IntFlag):
     """Server side user privileges."""
 
@@ -36,7 +44,7 @@ class ClientPrivileges(IntFlag):
 
 
 @unique
-class UserIDS(IntEnum):
+class UserIDS(IntEnum): # unused for right now?
     BANCHO_AUTH_FAILED = -1
     OLD_CLIENT = -2
     BANNED = -3
@@ -159,15 +167,24 @@ class GameMode(IntEnum):
     ap_std   = 7
 
     @staticmethod
+    def from_params(mode: int, mods: int):
+        if mods & Mods.RELAX:
+            return GameMode(mode + 4)
+        elif mods & Mods.AUTOPILOT:
+            return GameMode(7)
+        else:
+            return GameMode(mode)
+
+    @staticmethod
     def to_api(mode: int):
         return ('std', 'taiko', 'ctb', 'mania')[mode]
 
     @staticmethod
     def to_db(mode):
         return {
-            0: 'std',
-            1: 'taiko',
-            2: 'ctb',
+            0: ('std', 'reg'),
+            1: ('taiko', 'reg'),
+            2: ('ctb', 'reg'),
             3: 'mania',
             4: ('std', 'rx'),
             5: ('taiko', 'rx'),

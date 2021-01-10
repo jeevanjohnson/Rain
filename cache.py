@@ -8,7 +8,7 @@ channels = [
     # '#name', 'description', 1 player count, what prives you need to see | privs
 ]
 
-def from_name(username: str):
+async def from_name(username: str):
     for key in online:
         if (p := online[key]).username == username:
             return p

@@ -15,7 +15,7 @@ class Player:
         self.username = ''
         self.userid = userID
         self.version = version
-        self.hardwareData = hardwareData
+        self.hardwareData = [x for x in hardwareData if x]
         self.loginTime = loginTime
 
         self._privileges = 1
@@ -29,10 +29,10 @@ class Player:
         self.info_text = ''
         self.map_md5 = ''
         self.mods = Mods.NOMOD
-        self.mode = GameMode.rx_std
+        self.mode = GameMode.vn_std
         self.map_id = 0
 
-        self.queue = [] # this is when the client wants to get other player's info or whatever
+        self.enqueue = [] # this is when the client wants to get other player's info or whatever
 
     @property
     def banco_privs(self):

@@ -4,7 +4,7 @@ from serverwrapper import OsuServer
 from packets import PacketIDS
 from typing import Union
 from objects.player import Player
-from objects.const import GameMode, RankedStatus, UserIDS
+from objects.const import GameMode, Mods, RankedStatus, RankingType, UserIDS
 from helpers import USERS, SCORES, BEATMAPS
 from functools import lru_cache
 import aiohttp
@@ -157,6 +157,27 @@ async def accountCreation(conn: Connection) -> bytes:
 
 @s.handler(target = '/web/osu-osz2-getscores.php', domains = web)
 async def leaderboard(conn: Connection) -> bytes:
+    conn.set_status(200)
+    body = b''
+    params = conn.request['params']
+    p: Player = await cache.from_name(params['us'])
+    if not p:
+        return b''
+    map_md5 = params['c']
+    mods = Mods(int(params['mods']))
+    mode = GameMode.from_params(int(params['m']), mods)
+    map_set_id = int(params['i'])
+    rank_type = RankingType(int(params['v']))
+    filename = params['f'].replace('+', ' ')
+
+    if p.mode != mode:
+        p.mode = mode
+        await p.update()
+        p.enqueue.append(packets.userStats(p))
+        p.enqueue.append(packets.userPresence(p))
+    
+    url = 
+
     print()
 
 @s.handler(target = '/web/osu-search.php', domains = web)
@@ -204,26 +225,57 @@ async def direct(conn: Connection) -> bytes:
 
 @s.handler(target = PacketIDS.OSU_REQUEST_STATUS_UPDATE, domains = bancho)
 async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
+    conn.set_status(200)
     if not p:
-        conn.set_status(200)
         body = b''
         body += packets.notification('Server restarting!') 
         body += packets.systemRestart()
         conn.set_body(body)
         return conn.response
+    if p.enqueue:
+        body = b''
+        for x in p.enqueue:
+            body += x
+        conn.set_body(body)
+        return conn.response #TODO don't return
     
     printc(PacketIDS.OSU_REQUEST_STATUS_UPDATE.name, Colors.Red)
     return b''
 
-@s.handler(target = PacketIDS.OSU_CHANGE_ACTION, domains = bancho)
+@s.handler(target = PacketIDS.OSU_USER_STATS_REQUEST, domains = bancho)
 async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
+    conn.set_status(200)
     if not p:
-        conn.set_status(200)
         body = b''
         body += packets.notification('Server restarting!') 
         body += packets.systemRestart()
         conn.set_body(body)
         return conn.response
+    if p.enqueue:
+        body = b''
+        for x in p.enqueue:
+            body += x
+        conn.set_body(body)
+        return conn.response #TODO don't return
+    
+    printc(PacketIDS.OSU_USER_STATS_REQUEST.name, Colors.Red)
+    return b''
+
+@s.handler(target = PacketIDS.OSU_CHANGE_ACTION, domains = bancho)
+async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
+    conn.set_status(200)
+    if not p:
+        body = b''
+        body += packets.notification('Server restarting!') 
+        body += packets.systemRestart()
+        conn.set_body(body)
+        return conn.response
+    if p.enqueue:
+        body = b''
+        for x in p.enqueue:
+            body += x
+        conn.set_body(body)
+        return conn.response #TODO don't return
     
     printc(PacketIDS.OSU_CHANGE_ACTION.name, Colors.Red)
     return b''
