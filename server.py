@@ -9,6 +9,7 @@ from objects.const import \
 Action, GameMode, Mods, PresenceFilter, RankedStatus, RankingType, ServerRankedStatus, ClientPrivileges
 from helpers import USERS, SCORES, BEATMAPS
 from functools import lru_cache
+from const import process_cmd
 import aiohttp
 import packets
 import config
@@ -21,7 +22,7 @@ import json
 
 regex = {
     'email': re.compile(r'^\w+@\w+.\w+$'),
-    'beatmap': re.compile(r'https:\/\/osu\.ppy\.sh/b/(?P<mapid>[0-9]*)')
+    'beatmap': re.compile(r'https:\/\/osu\.ppy\.sh/b/(?P<mapid>[0-9]*)'),
 }
 
 s = OsuServer()
@@ -140,13 +141,11 @@ async def accountCreation(conn: Connection) -> bytes:
                     }
                 },
                 'mania': {
-                    'reg': {
                         'ranked_score': 0, 'acc': 0, 
                         'playcount': 0, 'total_score': 0, 
                         'rank': len(users) + 1, 'pp': 0 
                     }
-                }
-            })
+                })
         printc(f'{username} has registered an account!', Colors.Blue)
         body += b'ok'
     else:
@@ -271,6 +270,39 @@ async def receiveUpdates(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_body(body)
     return conn.response
 
+@s.handler(target = PacketIDS.OSU_PART_LOBBY, domains = bancho)
+async def partLobby(conn: Connection, p: Union[Player, bool]) -> bytes:
+    # get out of lobby?
+    conn.set_status(200)
+    body = b''
+    if not p:
+        body += packets.notification('Server restarting!') 
+        body += packets.systemRestart()
+        conn.set_body(body)
+        return conn.response
+    
+    print()
+
+    conn.set_body(body)
+    return conn.response
+
+@s.handler(target = PacketIDS.OSU_CHANNEL_PART, domains = bancho)
+async def channelPart(conn: Connection, p: Union[Player, bool]) -> bytes:
+    # get out of channel
+    conn.set_status(200)
+    body = b''
+    if not p:
+        body += packets.notification('Server restarting!') 
+        body += packets.systemRestart()
+        conn.set_body(body)
+        return conn.response
+    
+    channelname = packets.read_packet(conn.request['body'], 'string')
+    body += packets.channelKick(channelname)
+    
+    conn.set_body(body)
+    return conn.response
+
 @s.handler(target = PacketIDS.OSU_REQUEST_STATUS_UPDATE, domains = bancho)
 async def statusUpdate(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_status(200)
@@ -315,6 +347,40 @@ async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_body(body)
     return conn.response
 
+@s.handler(target = PacketIDS.OSU_SEND_PRIVATE_MESSAGE, domains = bancho)
+async def privmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
+    conn.set_status(200)
+    body = b''
+    if not p:
+        body += packets.notification('Server restarting!') 
+        body += packets.systemRestart()
+        conn.set_body(body)
+        return conn.response
+    msg = packets.read_packet(conn.request['body'], 'message')
+    target = await cache.from_name(msg[2])
+
+    if msg[1].startswith("\x01ACTION"):
+        x = regex['beatmap'].search(msg[1])
+        p.last_np = int(x['mapid'])
+    
+    if target.userid != 3: # if its not a bot
+        target.enqueue.append(packets.sendMessage(
+            p.username, msg[1], msg[2], p.userid
+        ))
+        conn.set_body(body)
+        return conn.response
+    
+    if msg[1].startswith(config.prefix):
+        if not (x := await process_cmd(msg[1], p)):
+            body = b'' # something
+        else:
+            body += packets.sendMessage(
+                target.username, x, p.username, target.userid
+            )
+    
+    conn.set_body(body)
+    return conn.response
+
 @s.handler(target = PacketIDS.OSU_SEND_PUBLIC_MESSAGE, domains = bancho)
 async def publicmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_status(200)
@@ -343,7 +409,7 @@ async def publicmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
         x = regex['beatmap'].search(msg[1])
         p.last_np = int(x['mapid'])
 
-    conn.set_body(b'')
+    conn.set_body(body)
     return conn.response
 
 @s.handler(target = PacketIDS.OSU_CHANGE_ACTION, domains = bancho)
@@ -389,7 +455,9 @@ async def channelJoin(conn: Connection, p: Union[Player, bool]) -> bytes:
         body = b'no channel found my man'
     else:
         conn.set_status(200)
-        body = packets.channelJoin(channelName)
+        body = packets.channelStart()
+        body += packets.channelJoin(channelName)
+        body += packets.channelInfo(x[0], x[1], x[2])
 
     conn.set_body(body)
     return conn.response
@@ -527,8 +595,7 @@ def run(socket_type: Union[str, tuple] = ("127.0.0.1", 5000)):
     # BEFORE we run the server we want to add our
     # bot object so we the user logins, they see the bot
     bot = Player(3, 20201229.2, ['bot'], time.time())
-    bot.action = Action.Playing
-    bot.username = 'bot'
-    bot.info_text = 'on your mom'
+    bot.action = Action.Afk
+    bot.username = 'Lamp'
     cache.online[3] = bot
     s.run(socket_type)

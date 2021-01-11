@@ -222,7 +222,9 @@ def read_packet(data: bytes, type: str):
     elif type == 'updates':
         decoded_data = x.read_updates()  
     elif type == 'channelJoin':
-        decoded_data = x.read_string()  
+        decoded_data = x.read_string() 
+    elif type == 'string':
+        decoded_data = x.read_string() 
     else:
         Exception("Can't read data")
     
@@ -393,6 +395,11 @@ def logout(userID: int) -> bytes:
     )
 
 def userStats(p: 'Player') -> bytes:
+    if p.mode >= GameMode(4):
+        p.mode -= 4
+        p.mode = GameMode(p.mode)
+    elif p.mode == GameMode(7):
+        p.mode = GameMode(0)
     return write(
         PacketIDS.CHO_USER_STATS, 
         (p.userid, 'int'), (p.action, 'b'),
@@ -443,6 +450,12 @@ def systemRestart(ms: int = 1) -> bytes:
 def pong() -> bytes:
     return write(
         PacketIDS.CHO_PONG
+    )
+
+def channelKick(name: str) -> bytes:
+    return write(
+        PacketIDS.CHO_CHANNEL_KICK,
+        (name, 'string')
     )
 
 def sendMessage(client: str, msg: str, target: str, userid: int):

@@ -46,7 +46,7 @@ class Player:
             # like direct
             p |= (ClientPrivileges.Player | ClientPrivileges.Supporter)
         
-        if self.userid == 3:
+        if self.userid in (3, 4):
             p |= (p | ClientPrivileges.Owner)
 
         return p
@@ -55,7 +55,7 @@ class Player:
         async with USERS as DB:
             x = DB.get(lambda user: True if user['userid'] == self.userid else False)
             self.username = x['username']
-            self._privileges = x['privs']
+            self._privileges = x['privs'] # if self.userid not in (3, 4) else x['privs'] + Privileges.Admin
             self.privileges = Privileges(self._privileges)
 
             d = GameMode.to_db(self.mode)

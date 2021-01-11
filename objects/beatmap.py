@@ -46,7 +46,7 @@ class Beatmap:
         b.artist = bmap['artist']
         b.artist_unicode = bmap['artist_unicode']
         b.diff_name = bmap['version']
-        b.max_combo = int(bmap['max_combo'])
+        b.max_combo = int(bmap['max_combo'] or 0)
         b.cs = float(bmap['diff_size'])
         b.od = float(bmap['diff_overall'])
         b.hp = float(bmap['diff_drain'])
