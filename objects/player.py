@@ -24,6 +24,7 @@ class Player:
         self.country = (0, 'XX')
         self.location = (0.0, 0.0)
         self.stats = Stats()
+        self.pres_filter = PresenceFilter.All
 
         self.action = Action.Idle
         self.info_text = ''
@@ -42,6 +43,9 @@ class Player:
             # too give the user free supporter features
             # like direct
             p |= (ClientPrivileges.Player | ClientPrivileges.Supporter)
+        
+        if self.userid == 3:
+            p |= (p | ClientPrivileges.Owner)
 
         return p
 

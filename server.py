@@ -5,7 +5,8 @@ from serverwrapper import OsuServer
 from packets import PacketIDS
 from typing import Union
 from objects.player import Player
-from objects.const import GameMode, Mods, RankedStatus, RankingType, ServerRankedStatus, UserIDS
+from objects.const import \
+GameMode, Mods, PresenceFilter, RankedStatus, RankingType, ServerRankedStatus, ClientPrivileges
 from helpers import USERS, SCORES, BEATMAPS
 from functools import lru_cache
 import aiohttp
@@ -88,8 +89,8 @@ async def accountCreation(conn: Connection) -> bytes:
         password = hashlib.md5(password).hexdigest()
         async with USERS as db:
             users = db.search(lambda x: True if True else True)
-            i = {
-                'userid': len(users) + 3,
+            db.insert({
+                'userid': len(users) + 4,
                 'username': username,
                 'passwordmd5': password,
                 'email': email,
@@ -144,8 +145,7 @@ async def accountCreation(conn: Connection) -> bytes:
                         'rank': len(users) + 1, 'pp': 0 
                     }
                 }
-            }
-            db.insert(i)
+            })
         printc(f'{username} has registered an account!', Colors.Blue)
         body += b'ok'
     else:
@@ -186,14 +186,21 @@ async def leaderboard(conn: Connection) -> bytes:
         p.enqueue.append(packets.userPresence(p))
     
     lb = []
-    if filename in cache.beatmap:
-        m = cache.beatmap[map_md5]
-        lb.append(f'{m.rankedstatus}|false')
-    elif (m := await Beatmap.from_md5_to_api(map_md5)):
-        lb.append(f'{m.rankedstatus}|false')
-        cache.beatmap[map_md5] = m
-    else:
-        lb.append(f'{ServerRankedStatus.Pending}|false')
+    async with BEATMAPS as DB:
+        if map_md5 in cache.beatmap:
+            m = cache.beatmap[map_md5]
+            lb.append(f'{m["rankedstatus"]}|false')
+        elif (m := DB.get(lambda bmap: True if bmap['md5'] == map_md5 else False)):
+            lb.append(f'{m["rankedstatus"]}|false')
+            cache.beatmap[map_md5] = m
+        elif (m := await Beatmap.from_md5(map_md5)):
+            lb.append(f'{m.rankedstatus}|false')
+            cache.beatmap[map_md5] = m.__dict__
+            DB.insert(m.__dict__)
+        elif os.path.exists(f'./data/beatmaps/{filename}'):
+            lb.append(f'{ServerRankedStatus.UpdateAvailable}|false')
+        else:
+            lb.append(f'{ServerRankedStatus.NotSubmitted}|false')
     
     conn.set_body('\n'.join(lb).encode())
     return conn.response
@@ -242,80 +249,134 @@ async def direct(conn: Connection) -> bytes:
     return conn.response
 
 @s.handler(target = PacketIDS.OSU_RECEIVE_UPDATES, domains = bancho)
-async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
+async def receiveUpdates(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_status(200)
+    body = b''
     if not p:
-        body = b''
         body += packets.notification('Server restarting!') 
         body += packets.systemRestart()
         conn.set_body(body)
         return conn.response
     if p.enqueue:
-        body = b''
         for x in p.enqueue:
             body += x
-        conn.set_body(body)
-        return conn.response #TODO don't return
+        p.enqueue = []
+
+    value = packets.read_packet(conn.request['body'], 'updates')
+    if value not in list(PresenceFilter):
+        return b''
     
-    printc(PacketIDS.OSU_RECEIVE_UPDATES.name, Colors.Red)
-    return b''
+    p.pres_filter = PresenceFilter(value)
+    conn.set_body(body)
+    return conn.response
 
 @s.handler(target = PacketIDS.OSU_REQUEST_STATUS_UPDATE, domains = bancho)
-async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
+async def statusUpdate(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_status(200)
+    body = b''
     if not p:
-        body = b''
         body += packets.notification('Server restarting!') 
         body += packets.systemRestart()
         conn.set_body(body)
         return conn.response
     if p.enqueue:
-        body = b''
         for x in p.enqueue:
             body += x
-        conn.set_body(body)
-        return conn.response #TODO don't return
+        p.enqueue = []
+        
+    for player in cache.online:
+        body += packets.userStats(cache.online[player])
     
-    printc(PacketIDS.OSU_REQUEST_STATUS_UPDATE.name, Colors.Red)
-    return b''
+    conn.set_body(body)
+    return conn.response
 
 @s.handler(target = PacketIDS.OSU_USER_STATS_REQUEST, domains = bancho)
 async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_status(200)
+    body = b''
     if not p:
-        body = b''
         body += packets.notification('Server restarting!') 
         body += packets.systemRestart()
         conn.set_body(body)
         return conn.response
     if p.enqueue:
-        body = b''
         for x in p.enqueue:
             body += x
-        conn.set_body(body)
-        return conn.response #TODO don't return
+        p.enqueue = []
+
+    userids = packets.read_packet(conn.request['body'], 'list_i32')
+    users = await cache.from_userids(userids)
+    for key in users:
+        player = cache.online[key]
+        player.enqueue.append(packets.userStats(player))
+    conn.set_body(body)
+    return conn.response
+
+@s.handler(target = PacketIDS.OSU_SEND_PUBLIC_MESSAGE, domains = bancho)
+async def publicmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
+    # 0: client
+    # 1: msg
+    # 2: target
+    # 3: client_id
+    msg = packets.read_packet(conn.request['body'], 'message')
+    conn.set_status(200)
+    if msg[2] == '#osu':
+        for key in cache.online:
+            if key == p.userid:
+                continue
+            client = cache.online[key]
     
-    printc(PacketIDS.OSU_USER_STATS_REQUEST.name, Colors.Red)
-    return b''
+            client.enqueue.append(packets.sendMessage(p.username, msg[1], msg[2], p.userid))
+    
+    conn.set_body(b'')
+    return conn.response
 
 @s.handler(target = PacketIDS.OSU_CHANGE_ACTION, domains = bancho)
 async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
+    # action: 'unB'
+    # info_text: string
+    # map_md5: string
+    # mods: 'unI'
+    # mode: 'unB'
+    # map_id: 'int'
+    
     conn.set_status(200)
+    body = b''
     if not p:
-        body = b''
         body += packets.notification('Server restarting!') 
         body += packets.systemRestart()
         conn.set_body(body)
         return conn.response
     if p.enqueue:
-        body = b''
         for x in p.enqueue:
             body += x
-        conn.set_body(body)
-        return conn.response #TODO don't return
+        p.enqueue = []
     
-    printc(PacketIDS.OSU_CHANGE_ACTION.name, Colors.Red)
-    return b''
+    actions = packets.read_packet(conn.request['body'], 'action')
+    p.action = actions['action']
+    p.info_text = actions['info_text']
+    p.map_md5 = actions['map_md5']
+    p.mods = actions['mods']
+    p.mode = actions['mode']
+    p.map_id = actions['map_id']
+    
+    p.enqueue.append(packets.userStats(p))
+
+    conn.set_body(body)
+    return conn.response
+
+@s.handler(target = PacketIDS.OSU_CHANNEL_JOIN, domains = bancho)
+async def channelJoin(conn: Connection, p: Union[Player, bool]) -> bytes:
+    channelName = packets.read_packet(conn.request['body'], 'channelJoin')
+    if not (x := await cache.get_channel_from_name(channelName)):
+        conn.set_status(404)
+        body = b'no channel found my man'
+    else:
+        conn.set_status(200)
+        body = packets.channelJoin(channelName)
+
+    conn.set_body(body)
+    return conn.response
 
 @s.handler(target = r'^/d/(?P<setid>[0-9]*)$', domains = web)
 @lru_cache(maxsize=None)
@@ -349,7 +410,17 @@ async def ava(conn: Connection) -> bytes:
 @s.handler(target = PacketIDS.OSU_PING, domains = bancho)
 async def pong(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_status(200)
-    conn.set_body(b'')
+    body = b''
+    if not p:
+        body += packets.notification('Server restarting!') 
+        body += packets.systemRestart()
+        conn.set_body(body)
+        return conn.response
+    if p.enqueue:
+        for x in p.enqueue:
+            body += x
+        p.enqueue = []
+    conn.set_body(body or b'')
     return conn.response
 
 @s.handler(target = PacketIDS.OSU_LOGOUT, domains = bancho)
@@ -393,40 +464,49 @@ async def login(conn: Connection) -> bytes:
         conn.set_body(body)   
         return conn.response
         
-    body += packets.userID(userid)
-    
-    p = Player(
-        userid, credentials[2], credentials[5], time.time()
-    )
-    await p.update()
-    
-    body += packets.menuIcon('|'.join(config.menuicon))
-    body += packets.notification(loginMsg.format(len(cache.online) + 1))
-    body += packets.protocolVersion()
-    body += packets.banchoPrivs(p)
-    body += packets.userStats(p)
-    body += packets.userPresence(p)
-    body += packets.channelStart()
-    
-    for c in cache.channels:
-        if not p.privileges & c[3]: # check if player is allowed to see channels privs 
-            continue
-            
-        body += packets.channelJoin(c[0])
-        body += packets.channelInfo(c[0], c[1], c[2])
-    
-    #TODO: channels
-    
-    body += packets.userStats(p)
-    for x in cache.online: 
-        body += packets.userPresence(cache.online[x]) + packets.userStats(cache.online[x])
-    cache.online[userid] = p
+    if userid in cache.online:
+        userid = -1
+        body += packets.userID(userid)
+        body += packets.notification("Your account is already logged in from somewhere else!")
+    else:    
+        body += packets.userID(userid)
+        
+        p = Player(
+            userid, credentials[2], credentials[5], time.time()
+        )
+        await p.update()
+        
+        body += packets.menuIcon('|'.join(config.menuicon))
+        body += packets.notification(loginMsg.format(len(cache.online) + 1))
+        body += packets.protocolVersion()
+        body += packets.banchoPrivs(p)
+        body += packets.userStats(p)
+        body += packets.userPresence(p)
+        body += packets.channelStart()
+        
+        for c in cache.channels:
+            if not p.privileges & c[3]: 
+                continue
+                
+            body += packets.channelJoin(c[0])
+            body += packets.channelInfo(c[0], c[1], c[2])
+        
+        body += packets.userStats(p)
+        for x in cache.online: 
+            body += packets.userPresence(cache.online[x]) + packets.userStats(cache.online[x])
+        cache.online[userid] = p
+        printc(f'{p.username} has logged in!', Colors.Blue)
 
+    
     conn.set_status(200)
     conn.add_header('cho-token', userid)
     conn.set_body(body)
-    printc(f'{p.username} has logged in!', Colors.Blue)
     return conn.response
 
 def run(socket_type: Union[str, tuple] = ("127.0.0.1", 5000)):
+    # BEFORE we run the server we want to add our
+    # bot object so we the user logins, they see the bot
+    bot = Player(3, 20201229.2, ['bot'], time.time())
+    bot.username = 'owo'
+    bot.info_text = 'looooool im admin aha' if bot.banco_privs & ClientPrivileges.Owner else 'nope not admin lolk'
     s.run(socket_type)

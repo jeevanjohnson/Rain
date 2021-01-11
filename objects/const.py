@@ -1,6 +1,15 @@
 from enum import IntEnum, IntFlag, unique
 
 @unique
+class PresenceFilter(IntEnum):
+    # this filter allows you to
+    # see only your friends for chat ingame
+    # or everyone online
+    Nil     = 0
+    All     = 1
+    Friends = 2
+
+@unique
 class RankingType(IntEnum):
     Local   = 0
     Top     = 1
@@ -145,6 +154,7 @@ class ServerRankedStatus(IntEnum):
     def from_api(status: int):
         return {
             -2: ServerRankedStatus.Pending,
+            -1: ServerRankedStatus.NotSubmitted,
             0: ServerRankedStatus.Ranked,
             1: ServerRankedStatus.Ranked,
             2: ServerRankedStatus.Approved,

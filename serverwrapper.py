@@ -31,6 +31,7 @@ class OsuServer:
                             return await f(conn)
                         else:
                             t = PacketIDS(conn.request['body'][0]) # read first byte in body
+                            printc(t.name, Colors.Green)
                             if t not in self.handlers:
                                 printc(f'Unhandled Request: {t.name}', Colors.Red)
                                 return b'error: :c'
