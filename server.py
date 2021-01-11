@@ -6,7 +6,7 @@ from packets import PacketIDS
 from typing import Union
 from objects.player import Player
 from objects.const import \
-GameMode, Mods, PresenceFilter, RankedStatus, RankingType, ServerRankedStatus, ClientPrivileges
+Action, GameMode, Mods, PresenceFilter, RankedStatus, RankingType, ServerRankedStatus, ClientPrivileges
 from helpers import USERS, SCORES, BEATMAPS
 from functools import lru_cache
 import aiohttp
@@ -20,7 +20,8 @@ import re
 import json
 
 regex = {
-    'email': re.compile(r'^\w+@\w+.\w+$')
+    'email': re.compile(r'^\w+@\w+.\w+$'),
+    'beatmap': re.compile(r'https:\/\/osu\.ppy\.sh/b/(?P<mapid>[0-9]*)')
 }
 
 s = OsuServer()
@@ -285,7 +286,9 @@ async def statusUpdate(conn: Connection, p: Union[Player, bool]) -> bytes:
         p.enqueue = []
         
     for player in cache.online:
-        body += packets.userStats(cache.online[player])
+        player = cache.online[player]
+        if player.userid != p.userid:
+            body += packets.userStats(player)
     
     conn.set_body(body)
     return conn.response
@@ -314,6 +317,14 @@ async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
 
 @s.handler(target = PacketIDS.OSU_SEND_PUBLIC_MESSAGE, domains = bancho)
 async def publicmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
+    conn.set_status(200)
+    body = b''
+    if not p:
+        body += packets.notification('Server restarting!') 
+        body += packets.systemRestart()
+        conn.set_body(body)
+        return conn.response
+
     # 0: client
     # 1: msg
     # 2: target
@@ -328,6 +339,10 @@ async def publicmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
     
             client.enqueue.append(packets.sendMessage(p.username, msg[1], msg[2], p.userid))
     
+    if msg[1].startswith("\x01ACTION"):
+        x = regex['beatmap'].search(msg[1])
+        p.last_np = int(x['mapid'])
+
     conn.set_body(b'')
     return conn.response
 
@@ -367,6 +382,7 @@ async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
 
 @s.handler(target = PacketIDS.OSU_CHANNEL_JOIN, domains = bancho)
 async def channelJoin(conn: Connection, p: Union[Player, bool]) -> bytes:
+    # kinda broken
     channelName = packets.read_packet(conn.request['body'], 'channelJoin')
     if not (x := await cache.get_channel_from_name(channelName)):
         conn.set_status(404)
@@ -420,7 +436,7 @@ async def pong(conn: Connection, p: Union[Player, bool]) -> bytes:
         for x in p.enqueue:
             body += x
         p.enqueue = []
-    conn.set_body(body or b'')
+    conn.set_body(body)
     return conn.response
 
 @s.handler(target = PacketIDS.OSU_LOGOUT, domains = bancho)
@@ -492,8 +508,12 @@ async def login(conn: Connection) -> bytes:
             body += packets.channelInfo(c[0], c[1], c[2])
         
         body += packets.userStats(p)
-        for x in cache.online: 
-            body += packets.userPresence(cache.online[x]) + packets.userStats(cache.online[x])
+        for x in cache.online:
+            x = cache.online[x]
+            if x.userid != 3: # bot
+                x.enqueue.append(packets.userStats(p))
+            if x.userid != p.userid:
+                body += packets.userPresence(x) + packets.userStats(x)
         cache.online[userid] = p
         printc(f'{p.username} has logged in!', Colors.Blue)
 
@@ -507,6 +527,8 @@ def run(socket_type: Union[str, tuple] = ("127.0.0.1", 5000)):
     # BEFORE we run the server we want to add our
     # bot object so we the user logins, they see the bot
     bot = Player(3, 20201229.2, ['bot'], time.time())
-    bot.username = 'owo'
-    bot.info_text = 'looooool im admin aha' if bot.banco_privs & ClientPrivileges.Owner else 'nope not admin lolk'
+    bot.action = Action.Playing
+    bot.username = 'bot'
+    bot.info_text = 'on your mom'
+    cache.online[3] = bot
     s.run(socket_type)

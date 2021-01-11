@@ -33,6 +33,8 @@ class Player:
         self.mode = GameMode.vn_std
         self.map_id = 0
 
+        self.last_np = 0
+
         self.enqueue = [] # this is when the client wants to get other player's info or whatever
 
     @property
