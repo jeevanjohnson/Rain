@@ -1,3 +1,4 @@
+from objects.score import Score
 from objects.beatmap import Beatmap
 from WebLamp import Connection, printc
 from WebLamp.utlies import Colors
@@ -160,6 +161,12 @@ async def scoreSub(conn: Connection) -> bytes:
     # When osu sends 'replay bytes'
     # it doesn't actually send replay bytes
     # it sends cursor movements or frames as a proper word
+    m = conn.request['multipart']
+    score = await Score.from_submission({
+        'iv': m[12][1][:-2], 'score': m[3][1][:-2],
+        'osuver': m[9][1][:-2]
+    })
+    
     print()
     
     return b''

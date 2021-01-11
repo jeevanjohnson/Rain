@@ -1,5 +1,15 @@
 from enum import IntEnum, IntFlag, unique
 
+class DICT_TO_CLASS:
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
+
+@unique
+class ScoreStatus(IntEnum):
+	FAILED = 0
+	SUBMITTED = 1
+	BEST = 2
+
 @unique
 class PresenceFilter(IntEnum):
     # this filter allows you to
@@ -98,7 +108,52 @@ class Mods(IntFlag):
     SCOREV2 = 1 << 29
     MIRROR = 1 << 30
 
-    def __repr__(self) -> str:
+    @staticmethod
+    def readable(m: int = None) -> str:
+        _mod_dict = {
+           Mods.NOFAIL: 'NF',
+           Mods.EASY: 'EZ',
+           Mods.TOUCHSCREEN: 'TD',
+           Mods.HIDDEN: 'HD',
+           Mods.HARDROCK: 'HR',
+           Mods.SUDDENDEATH: 'SD',
+           Mods.DOUBLETIME: 'DT',
+           Mods.RELAX: 'RX',
+           Mods.HALFTIME: 'HT',
+           Mods.NIGHTCORE: 'NC',
+           Mods.FLASHLIGHT: 'FL',
+           Mods.AUTOPLAY: 'AU',
+           Mods.SPUNOUT: 'SO',
+           Mods.AUTOPILOT: 'AP',
+           Mods.PERFECT: 'PF',
+           Mods.KEY4: 'K4',
+           Mods.KEY5: 'K5',
+           Mods.KEY6: 'K6',
+           Mods.KEY7: 'K7',
+           Mods.KEY8: 'K8',
+           Mods.FADEIN: 'FI',
+           Mods.RANDOM: 'RN',
+           Mods.CINEMA: 'CN',
+           Mods.TARGET: 'TP',
+           Mods.KEY9: 'K9',
+           Mods.KEYCOOP: 'CO',
+           Mods.KEY1: 'K1',
+           Mods.KEY3: 'K3',
+           Mods.KEY2: 'K2',
+           Mods.SCOREV2: 'V2',
+           Mods.MIRROR: 'MI'
+       }
+       
+        if not m:
+           return 'NM'
+            # dt/nc is a special case, as osu! will send
+            # the mods as 'DTNC' while only NC is applied.
+        if m & Mods.NIGHTCORE:
+            m &= ~Mods.DOUBLETIME
+        
+        return ''.join(v for k, v in _mod_dict.items() if m & k)
+    
+    def __repr__(self, m: int = None) -> str:
         _mod_dict = {
            Mods.NOFAIL: 'NF',
            Mods.EASY: 'EZ',
@@ -138,7 +193,8 @@ class Mods(IntFlag):
             # the mods as 'DTNC' while only NC is applied.
         if self & Mods.NIGHTCORE:
             self &= ~Mods.DOUBLETIME
-            return ''.join(v for k, v in _mod_dict.items() if self & k)
+        
+        return ''.join(v for k, v in _mod_dict.items() if self & k)
 
 @unique
 class ServerRankedStatus(IntEnum):

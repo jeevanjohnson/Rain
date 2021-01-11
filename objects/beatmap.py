@@ -14,6 +14,7 @@ class Beatmap:
         self.hit_length: int = None
         self.title: str = None
         self.title_unicode: str = None
+        self.filename: str = None
         self.artist: str = None
         self.artist_unicode: str = None
         self.diff_name: str = None
@@ -57,7 +58,8 @@ class Beatmap:
             if not req or req.status != 200 or not (r := await req.content.read()):
                 return None
 
-        filename = f'{b.artist} - {b.title} ({b.creator}) {b.diff_name}'
+        b.filename = filename = f'{b.artist} - {b.title} {b.creator} {b.diff_name}'
+        b.filename += '.osu'
         with open(f'./data/beatmaps/{filename}.osu', 'wb') as f:
             f.write(r)
 
