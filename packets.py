@@ -258,7 +258,6 @@ class PacketReader:
         ]
 
     def read_i32_list(self, len_size: int) -> list:
-        # MISS READ
         length, = struct.unpack(f'<{"h" if len_size == 2 else "i"}', self.data[:len_size])
         self.offset += len_size
 
