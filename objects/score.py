@@ -1,4 +1,5 @@
 from base64 import b64decode
+from typing import Union
 from helpers import BEATMAPS, USERS
 from py3rijndael import RijndaelCbc, ZeroPadding
 from objects.const import Mods, ScoreStatus, GameMode, DICT_TO_CLASS
@@ -83,8 +84,8 @@ class Score:
         from here i made it a default command on linux so probably just use this ^
         """
         if self.mode not in (0, 1, 4, 5, 7): # check if mode not supported man
-                self.pp = 0.0
-                return # TODO?: add mania and ctb someday
+            self.pp = 0.0
+            return # TODO?: add mania and ctb someday
 
         async with BEATMAPS as DB:
             beatmap = DB.get(lambda mapp: True if mapp['md5'] == self.map_md5 else False)
@@ -183,3 +184,32 @@ class Score:
                 self.nkatu * 200.0,
                 (self.n300 + self.ngeki) * 300.0
             )) / (total * 300.0)
+
+# for bot
+async def oppai(mapid: int, mods: str, acc: Union[tuple, float] = (100.0, 99.0, 98.0, 97.0, 96.0)):
+    msg = []
+    async with BEATMAPS as DB:
+        beatmap = DB.get(lambda mapp: True if mapp['mapid'] == mapid else False)
+        if not beatmap:
+            return ''
+    beatmap = DICT_TO_CLASS(**beatmap)
+    filepath = os.path.abspath(f"./data/beatmaps/{beatmap.filename}")
+    
+    if isinstance(acc, tuple):
+        for a in acc:
+            cmd = ['oppai', f'"{filepath}"', f'{a}%', f'+{mods}', '-ojson']
+
+            process = run(
+                ' '.join(cmd), shell = True, stdout = PIPE, stderr = PIPE
+            )
+
+            output = loads(process.stdout.decode('utf-8', errors='ignore'))
+
+            if 'pp' not in output:
+                msg.append(f'0 PP for {a}%')
+            else:
+                msg.append(f"{output['pp']:.2f}PP for {a}%")
+    else:
+        ...
+    
+    return '\n'.join(msg)

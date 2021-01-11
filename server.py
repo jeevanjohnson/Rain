@@ -11,6 +11,7 @@ Action, GameMode, Mods, PresenceFilter, RankedStatus, RankingType, ServerRankedS
 from helpers import USERS, SCORES, BEATMAPS
 from functools import lru_cache
 from const import process_cmd
+from objects.score import oppai
 import aiohttp
 import packets
 import config
@@ -369,6 +370,11 @@ async def privmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
     if msg[1].startswith("\x01ACTION"):
         x = regex['beatmap'].search(msg[1])
         p.last_np = int(x['mapid'])
+        if target.userid == 3: # if its the bot
+            m = await oppai(p.last_np, Mods.readable(p.mods))
+            body += packets.sendMessage(
+                target.username, m, p.username, target.userid
+            )
     
     if target.userid != 3: # if its not a bot
         target.enqueue.append(packets.sendMessage(
@@ -379,7 +385,7 @@ async def privmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
     
     if msg[1].startswith(config.prefix):
         if not (x := await process_cmd(msg[1], p)):
-            body = b'' # something
+            body += b''
         else:
             body += packets.sendMessage(
                 target.username, x, p.username, target.userid
@@ -404,13 +410,12 @@ async def publicmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
     # 3: client_id
     msg = packets.read_packet(conn.request['body'], 'message')
     conn.set_status(200)
-    if msg[2] == '#osu':
-        for key in cache.online:
-            if key == p.userid:
-                continue
-            client = cache.online[key]
-    
-            client.enqueue.append(packets.sendMessage(p.username, msg[1], msg[2], p.userid))
+    for key in cache.online:
+        if key == p.userid:
+            continue
+        client = cache.online[key]
+
+        client.enqueue.append(packets.sendMessage(p.username, msg[1], msg[2], p.userid))
     
     if msg[1].startswith("\x01ACTION"):
         x = regex['beatmap'].search(msg[1])
@@ -578,7 +583,10 @@ async def login(conn: Connection) -> bytes:
         for c in cache.channels:
             if not p.privileges & c[3]: 
                 continue
-                
+            
+            if c[0] == 'lobby':
+                continue
+
             body += packets.channelJoin(c[0])
             body += packets.channelInfo(c[0], c[1], c[2])
         

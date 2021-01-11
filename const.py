@@ -1,6 +1,8 @@
 from typing import Union
 from objects.player import Player
 from objects.const import Privileges
+from config import prefix
+import packets
 import json
 import re
 
@@ -12,8 +14,19 @@ def command(rgx: str, perms: int):
         return func
     return inner
 
-@command(r'^\!(?P<type>[a-z]*)\ (?P<args>.*)', Privileges.Admin)
+@command(f'^\{prefix}alert\ (?P<msg>.*)$', Privileges.Normal)
+async def alert(msg: dict, p: Player) -> str:
+    from cache import online
+    msg = msg['msg']
+    for key in online:
+        x = online[key]
+        x.enqueue.append(packets.notification(msg.replace(r'\n', '\n')))
+    
+    return 'Alert Sent!'
+
+@command(f'^\{prefix}py\ (?P<args>.*)', Privileges.Normal)
 async def py(msg: dict, p: Player) -> str:
+    #TODO: change from normal user to admin
     import cache
     try:
         f = {}
