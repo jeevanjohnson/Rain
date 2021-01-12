@@ -8,6 +8,7 @@ class Beatmap:
         self.setid: int = None
         self.mapid: int = None
         self.rankedstatus: ServerRankedStatus = None
+        self.approvedDate: str = None
         self.md5: str = None
         self.creator: str = None
         self.total_length: int = None
@@ -25,6 +26,11 @@ class Beatmap:
         self.ar: float = None
     
     @staticmethod
+    async def from_db(key) -> dict:
+        async with BEATMAPS as DB:
+            return DB.get(key).copy()
+        
+    @staticmethod
     async def from_md5(md5: str): 
         b = Beatmap()
         params = {'k': config.api_keys['osu'], 'h': md5}
@@ -39,6 +45,7 @@ class Beatmap:
         b.mapid = int(bmap['beatmap_id'])
         b.creator = bmap['creator']
         b.rankedstatus = ServerRankedStatus.from_api(int(bmap['approved']))
+        b.approvedDate = bmap['approved_date']
         b.md5 = md5
         b.total_length = int(bmap['total_length'])
         b.hit_length = int(bmap['hit_length'])
@@ -58,9 +65,9 @@ class Beatmap:
             if not req or req.status != 200 or not (r := await req.content.read()):
                 return None
 
-        b.filename = filename = f'{b.artist} - {b.title} {b.creator} {b.diff_name}'
-        b.filename += '.osu'
-        with open(f'./data/beatmaps/{filename}.osu', 'wb') as f:
+        b.filename = f"{b.artist} - {b.title} {b.creator} {b.diff_name}.osu". \
+        replace("''", '').replace('//', ' ').replace('/', '')
+        with open(f'./data/beatmaps/{b.filename}', 'wb') as f:
             f.write(r)
-
+        
         return b

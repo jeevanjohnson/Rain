@@ -34,6 +34,7 @@ class Player:
         self.map_id = 0
 
         self.last_np = 0
+        self.max_combo = 0
 
         self.enqueue = [] # this is when the client wants to get other player's info or whatever
 
@@ -45,10 +46,6 @@ class Player:
             # too give the user free supporter features
             # like direct
             p |= (ClientPrivileges.Player | ClientPrivileges.Supporter)
-        
-        if self.userid in (3, 4):
-            p |= (p | ClientPrivileges.Owner)
-
         return p
 
     async def update(self):
@@ -70,8 +67,9 @@ class Player:
             self.stats.total_score = s['total_score']
             self.stats.rank = s['rank']
             self.stats.pp = s['pp']
+            self.max_combo = s['max_combo']
 
-            DB.upsert(
+            DB.update(
                 {'hwidMd5': self.hardwareData, 'version': self.version},
                 lambda user: True if user['username'] == self.username else False
             )

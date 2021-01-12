@@ -1,6 +1,6 @@
 from base64 import b64decode
 from typing import Union
-from helpers import BEATMAPS, USERS
+from helpers import BEATMAPS, SCORES, USERS
 from py3rijndael import RijndaelCbc, ZeroPadding
 from objects.const import Mods, ScoreStatus, GameMode, DICT_TO_CLASS
 from subprocess import run, PIPE
@@ -10,8 +10,10 @@ import os
 
 class Score:
     def __init__(self) -> None:
+        self.scoreID = int = None
         self.map_md5: str = None
         self.player_name: str = None
+        self.userid: int = None
         self.mode: GameMode = None
         self.n300: int = None
         self.n100: int = None
@@ -24,7 +26,6 @@ class Score:
         self.perfect: bool = None
         self.rank: str = None
         self.mods: Mods = None
-        self.readableMods: str = None
         self.passed: bool = None
         self.playtime: float = None
         self.sub_type: ScoreStatus = None
@@ -49,8 +50,13 @@ class Score:
         async with USERS as DB:
             p = DB.get(lambda user: True if user['username'] == s.player_name else False)
             from cache import online
+            s.userid = p['userid']
             player = online[p['userid']]
-
+        
+        async with SCORES as DB:
+            alls = DB.all()
+        
+        s.scoreID = len(alls)
         s.mode = player.mode
         s.n300 = int(score_details[3])
         s.n100 = int(score_details[4])
@@ -63,9 +69,9 @@ class Score:
         s.perfect = score_details[11] != 'False'
         s.rank = score_details[12]
         s.mods = Mods(int(score_details[13]))
-        s.readableMods = Mods.readable(m = int(score_details[13]))
+        # s.readableMods = Mods.readable(m = int(score_details[13]))
         s.passed = score_details[14] == 'True'
-        s.playtime = time.time()
+        s.playtime = int(time.time())
         s.sub_type = ScoreStatus.SUBMITTED if s.passed else ScoreStatus.FAILED
         s.get_acc(int(s.mode))
 
@@ -97,21 +103,23 @@ class Score:
         filepath = os.path.abspath(f"./data/beatmaps/{beatmap.filename}") # little weird because we are currently in the data folder lol
         cmd = ['oppai', f'"{filepath}"']
 
-        cmd.append(f'{self.acc}%')
+        cmd.append(f'{self.acc:.2f}%')
         cmd.append(f'{self.n100}x100')
         cmd.append(f'{self.n50}x50')
         cmd.append(f'{self.nmiss}xmiss')
         cmd.append(f'{self.max_combo}x')
 
+        mods = self.mods.__repr__()
+
         if self.mode in (1, 5): # taiko, taikorx
             cmd.append(f'-m1')
             cmd.append(f'-taiko')
         
-        if 'TD' in self.readableMods: # check if touch screen
+        if 'TD' in mods: # check if touch screen
             cmd.append(f'-touch')
         
-        if self.readableMods and self.readableMods != 'NM':
-            cmd.append(f'+{self.readableMods.replace("RX", "")}')
+        if self.mods and mods != 'NM':
+            cmd.append(f'+{mods.replace("RX", "")}')
         
         cmd.append(f'-ojson')
 
@@ -122,7 +130,7 @@ class Score:
         output = loads(process.stdout.decode('utf-8', errors='ignore'))
         self.pp = 0.0
 
-        if 'RX' not in self.readableMods: #
+        if 'RX' not in mods: #
             self.pp = output['pp']        # Make a proper
         else:                             # pp system lmao
             self.pp = output['speed_pp']  #

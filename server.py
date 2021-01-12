@@ -6,9 +6,8 @@ from serverwrapper import OsuServer
 from packets import PacketIDS
 from typing import Union
 from objects.player import Player
-from objects.const import \
-Action, GameMode, Mods, PresenceFilter, RankedStatus, RankingType, ServerRankedStatus, ClientPrivileges
-from helpers import USERS, SCORES, BEATMAPS
+from objects.const import *
+from helpers import *
 from functools import lru_cache
 from const import process_cmd
 from objects.score import oppai
@@ -92,7 +91,7 @@ async def accountCreation(conn: Connection) -> bytes:
     if check == b'0':
         password = hashlib.md5(password).hexdigest()
         async with USERS as db:
-            users = db.search(lambda x: True if True else True)
+            users = db.all()
             db.insert({
                 'userid': len(users) + 4,
                 'username': username,
@@ -105,47 +104,55 @@ async def accountCreation(conn: Connection) -> bytes:
                     'reg': {
                         'ranked_score': 0, 'acc': 0, 
                         'playcount': 0, 'total_score': 0, 
-                        'rank': len(users) + 1, 'pp': 0 
+                        'rank': len(users) + 1, 'pp': 0, 
+                        'max_combo': 0,
                         },
                     'rx': {
                         'ranked_score': 0, 'acc': 0, 
                         'playcount': 0, 'total_score': 0, 
-                        'rank': len(users) + 1, 'pp': 0 
+                        'rank': len(users) + 1, 'pp': 0,
+                        'max_combo': 0,
                     },
                     'ap': {
                         'ranked_score': 0, 'acc': 0, 
                         'playcount': 0, 'total_score': 0, 
-                        'rank': len(users) + 1, 'pp': 0 
+                        'rank': len(users) + 1, 'pp': 0,
+                        'max_combo': 0,
                     }
                 },
                 'taiko': {
                     'reg': {
                         'ranked_score': 0, 'acc': 0, 
                         'playcount': 0, 'total_score': 0, 
-                        'rank': len(users) + 1, 'pp': 0 
+                        'rank': len(users) + 1, 'pp': 0,
+                        'max_combo': 0,
                     },
                     'rx': {
                         'ranked_score': 0, 'acc': 0, 
                         'playcount': 0, 'total_score': 0, 
-                        'rank': len(users) + 1, 'pp': 0 
+                        'rank': len(users) + 1, 'pp': 0 ,
+                        'max_combo': 0,
                     }
                 },
                 'ctb': {
                     'reg': {
                         'ranked_score': 0, 'acc': 0, 
                         'playcount': 0, 'total_score': 0, 
-                        'rank': len(users) + 1, 'pp': 0 
+                        'rank': len(users) + 1, 'pp': 0,
+                        'max_combo': 0,
                     },
                     'rx': {
                         'ranked_score': 0, 'acc': 0, 
                         'playcount': 0, 'total_score': 0, 
-                        'rank': len(users) + 1, 'pp': 0 
+                        'rank': len(users) + 1, 'pp': 0,
+                        'max_combo': 0,
                     }
                 },
                 'mania': {
                         'ranked_score': 0, 'acc': 0, 
                         'playcount': 0, 'total_score': 0, 
-                        'rank': len(users) + 1, 'pp': 0 
+                        'rank': len(users) + 1, 'pp': 0,
+                        'max_combo': 0, 
                     }
                 })
         printc(f'{username} has registered an account!', Colors.Blue)
@@ -160,17 +167,251 @@ async def accountCreation(conn: Connection) -> bytes:
 @s.handler(target = '/web/osu-submit-modular-selector.php', domains = web)
 async def scoreSub(conn: Connection) -> bytes:
     # When osu sends 'replay bytes'
-    # it doesn't actually send replay bytes
+    # it doesn't actually send replay  bytes
     # it sends cursor movements or frames as a proper word
+    #TODO: check if map is loved/unranked 
+    # if so don't update stats besides total score
+    #TODO: Check if the user didn't submit best score?
+    # im still thinking on how i could do this lol
+    conn.set_status(200)
     m = conn.request['multipart']
     score = await Score.from_submission({
         'iv': m[12][1][:-2], 'score': m[3][1][:-2],
         'osuver': m[9][1][:-2]
     })
+    if score.map_md5 in cache.beatmap:
+        bmap = cache.beatmap[score.map_md5]
+    else:
+        bmap = await Beatmap.from_db(lambda beatmap: True if beatmap['md5'] == score.map_md5 else False)
     
-    print()
+    p: Player = cache.online[score.userid]
+
+    if not bmap:
+        ... # should never happen
     
-    return b''
+    if not Privileges.Whitelisted & p.privileges and score.sub_type & ScoreStatus.SUBMITTED:
+
+        if p.mode in (GameMode.rx_std, GameMode.vn_std):
+            cap = config.std_pp_cap
+        elif p.mode in (GameMode.vn_taiko, GameMode.rx_taiko):
+            cap = config.taiko_pp_cap
+
+        if cap and score.pp > cap[int(bool(score.mods & Mods.RELAX))]:
+            ...
+            # TODO: Restrict or Ban the user depending on how many times they've been restricted
+        
+    if not score.sub_type & ScoreStatus.SUBMITTED or \
+    score.mods & Mods.RELAX or score.mods & Mods.AUTOPILOT:
+        
+        async with SCORES as DB:
+            x = DB.get(lambda sc: True if sc == score.__dict__ else False)
+            if x:
+                ... # restrict for duplicated score
+            
+            DB.insert(score.__dict__)
+        
+        # if not is_best_score(score):
+        #     conn.set_body(b'error: no')
+        #     return conn.response
+        
+        if score.mods & Mods.RELAX:
+            d = Mods.RELAX
+        else:
+            d = Mods.AUTOPILOT
+
+        previous_pp = p.stats.pp
+        async with SCORES as DB:
+            mm = DB.search(
+                lambda x: True if x['userid'] == p.userid and x['mods'] & d and ScoreStatus(x['sub_type']) == ScoreStatus.SUBMITTED else False
+            )
+        
+        # calc acc & pp
+        if not mm:
+            p.stats.pp += round(score.pp)
+            previous_acc = score.acc
+            p.stats.acc = score.acc
+        else:
+            for i, row in enumerate((allscores := sorted(mm, key = lambda sc: sc['pp'], reverse = True))):
+                p.stats.pp += row['pp'] * 0.95 ** i 
+        
+            p.stats.pp = round(p.stats.pp)
+        
+            t = 0
+            for sc in allscores:
+                t += sc['acc']
+            
+            previous_acc = p.stats.acc
+            p.stats.acc = t / len(allscores)
+            
+
+        # total score
+        previous_tscore = p.stats.total_score
+        p.stats.total_score += score.score
+
+        # max combo
+        previous_maxCombo = p.max_combo
+        p.max_combo = score.max_combo if score.max_combo and score.max_combo > p.max_combo else p.max_combo
+
+        p.stats.playcount += 1 # playcoun
+
+        previous_rank = p.stats.rank
+
+        d = GameMode.to_db(p.mode)
+        p.stats.rank = await get_rank_for_pp(p.stats.pp, key = d) # rank
+
+        async with USERS as DB:
+            if isinstance(d, tuple):
+                x = {d[0]: {d[1]: {
+                    'pp': p.stats.pp,
+                    'acc': p.stats.acc,
+                    'playcount': p.stats.playcount,
+                    'total_score': p.stats.total_score,
+                    'ranked_score': p.stats.ranked_score,
+                    'max_combo': p.max_combo,
+                    'rank': p.stats.rank
+                }}}
+            else:
+                x = {d: {
+                    'pp': p.stats.pp,
+                    'acc': p.stats.acc,
+                    'playcount': p.stats.playcount,
+                    'total_score': p.stats.total_score,
+                    'ranked_score': p.stats.ranked_score,
+                    'max_combo': p.max_combo,
+                    'rank': p.stats.rank
+
+                }}
+        
+        
+            for doc in DB.search(lambda x: x['userid'] == p.userid):
+                print()
+        
+        p.enqueue.append(packets.userStats(p))
+        
+        with open(f'./data/replays/{score.scoreID}.osr', 'wb') as f:
+            f.write(
+                m[13][2][:-2]
+            )
+
+        conn.set_body(b'error: no')
+        printc(f'Submitted score for {p.username} Mods: {repr(score.mods)}')
+        return conn.response
+    
+    with open(f'./data/replays/{score.scoreID}.osr', 'wb') as f:
+        f.write(
+            m[13][2][:-2]
+        )
+    
+    def x(scare):
+        if scare['map_md5'] == bmap['md5'] and \
+        ScoreStatus(scare['sub_type']) == ScoreStatus.SUBMITTED and \
+        not Mods(scare['mods']) & Mods.RELAX and \
+        not Mods(scare['mods']) & Mods.AUTOPILOT:
+            return True
+        else:
+            return False
+    
+    async with SCORES as DB:
+        scores = DB.search(x)
+        scores = addRanks((xx := remove_duplicates(sorted(scores, key = lambda sc: sc['pp'], reverse = True))))
+        scores = get_scores(p.userid, scores)
+        score.rankForScore = get_rank_for_score(score, xx)
+    
+    # TODO: fill in charts
+    chart = [
+        "beatmapId:{mapid}|beatmapSetId:{setid}|beatmapPlaycount:0|beatmapPasscount:0|approvedDate:{approvedDate}".format(**bmap),
+    ]
+    if not scores:
+        chart.append(
+            #TODO: Ranked Score
+            f"chartId:beatmap|chartUrl:https://osu.ppy.sh/b/{bmap['mapid']}|chartName:Beatmap Ranking|rankBefore:|rankAfter:{score.rankForScore}|maxComboBefore:|maxComboAfter:{score.max_combo}|accuracyBefore:|accuracyAfter:{score.acc:.2f}|rankedScoreBefore:|rankedScoreAfter:0|ppBefore:|ppAfter:{score.pp:.2f}|onlineScoreId:{score.scoreID}"
+        )
+    else:
+        chart.append(
+            #TODO: Ranked Score
+            f"chartId:beatmap|chartUrl:https://osu.ppy.sh/b/{bmap['mapid']}|chartName:Beatmap Ranking|rankBefore:|rankAfter:{score.rankForScore}|maxComboBefore:{scores['max_combo']}|maxComboAfter:{score.max_combo}|accuracyBefore:{scores['acc']:.2f}|accuracyAfter:{score.acc:.2f}|rankedScoreBefore:|rankedScoreAfter:0|ppBefore:{scores['pp']:.2f}|ppAfter:{score.pp:.2f}|onlineScoreId:{score.scoreID}"
+        )
+
+    previous_pp = p.stats.pp
+    async with SCORES as DB:
+        mm = DB.search(
+            lambda x: True if x['userid'] == p.userid and not x['mods'] & Mods.RELAX and not x['mods'] & Mods.AUTOPILOT and ScoreStatus(x['sub_type']) == ScoreStatus.SUBMITTED else False
+        )
+    
+    # calc acc & pp
+    if not mm:
+        p.stats.pp += round(score.pp)
+        previous_acc = score.acc
+        p.stats.acc = score.acc
+    else:
+        for i, row in enumerate((allscores := sorted(mm, key = lambda sc: sc['pp'], reverse = True))):
+            p.stats.pp += row['pp'] * 0.95 ** i 
+    
+        p.stats.pp = round(p.stats.pp)
+    
+        t = 0
+        for sc in allscores:
+            t += sc['acc']
+        
+        previous_acc = p.stats.acc
+        p.stats.acc = t / len(allscores)
+        
+
+    # total score
+    previous_tscore = p.stats.total_score
+    p.stats.total_score += score.score
+
+    # max combo
+    previous_maxCombo = p.max_combo
+    p.max_combo = score.max_combo if score.max_combo and score.max_combo > p.max_combo else p.max_combo
+
+    p.stats.playcount += 1 # playcoun
+
+    previous_rank = p.stats.rank
+
+    d = GameMode.to_db(p.mode)
+    p.stats.rank = await get_rank_for_pp(p.stats.pp, key = d) # rank
+
+    if isinstance(d, tuple):
+        x = {d[0]: {d[1]: {
+            'pp': p.stats.pp,
+            'acc': p.stats.acc,
+            'playcount': p.stats.playcount,
+            'total_score': p.stats.total_score,
+            'ranked_score': p.stats.ranked_score,
+            'max_combo': p.max_combo,
+            'rank': p.stats.rank
+        }}}
+    else:
+        x = {d: {
+            'pp': p.stats.pp,
+            'acc': p.stats.acc,
+            'playcount': p.stats.playcount,
+            'total_score': p.stats.total_score,
+            'ranked_score': p.stats.ranked_score,
+            'max_combo': p.max_combo,
+            'rank': p.stats.rank
+        }}
+    
+    async with USERS as DB:
+        DB.update(x, lambda x: x['userid'] == p.userid)
+    
+    p.enqueue.append(packets.userStats(p))
+
+    chart.append(
+        #TODO: Ranked Score
+        f"chartId:overall|chartUrl:https://osu.ppy.sh/u/{p.userid}|chartName:Overall Ranking|rankBefore:{previous_rank}|rankAfter:{p.stats.rank}|rankedScoreBefore:0|rankedScoreAfter:0|totalScoreBefore:{previous_tscore}|totalScoreAfter:{p.stats.total_score}|maxComboBefore:{previous_maxCombo}|maxComboAfter:{p.max_combo}|accuracyBefore:{previous_acc}|accuracyAfter:{p.stats.acc}|ppBefore:{previous_pp}|ppAfter:{p.stats.pp}|achievements-new:|onlineScoreId:{score.scoreID}"
+    )
+    
+    async with SCORES as DB:
+        x = DB.get(lambda sc: True if sc == score.__dict__ else False)
+        if x:
+            ... #TODO: restrict for duplicated score
+        
+        DB.insert(score.__dict__)
+
+    conn.set_body('\n'.join(chart).encode())
+    return conn.response
 
 @s.handler(target = '/web/osu-osz2-getscores.php', domains = web)
 async def leaderboard(conn: Connection) -> bytes:
@@ -198,7 +439,8 @@ async def leaderboard(conn: Connection) -> bytes:
         if map_md5 in cache.beatmap:
             m = cache.beatmap[map_md5]
             lb.append(f'{m["rankedstatus"]}|false')
-        elif (m := DB.get(lambda bmap: True if bmap['md5'] == map_md5 else False)):
+        elif (m := DB.get(lambda bmap: True if bmap['md5'] == map_md5 else False)) and \
+        os.path.exists(f'./data/beatmaps/{filename}'):
             lb.append(f'{m["rankedstatus"]}|false')
             cache.beatmap[map_md5] = m
         elif (m := await Beatmap.from_md5(map_md5)):
@@ -289,7 +531,7 @@ async def partLobby(conn: Connection, p: Union[Player, bool]) -> bytes:
         conn.set_body(body)
         return conn.response
     
-    print()
+    print(PacketIDS.OSU_PART_LOBBY.name)
 
     conn.set_body(body)
     return conn.response

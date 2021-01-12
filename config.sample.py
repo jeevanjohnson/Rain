@@ -13,3 +13,6 @@ api_keys = {
 }
 
 prefix = ''
+
+std_pp_cap = () # (reg cap, rx cap)
+taiko_pp_cap = () # (reg cap, rx cap)
