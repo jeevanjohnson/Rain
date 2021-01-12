@@ -1,3 +1,4 @@
+from objects.score import Score
 from objects.const import *
 from aiotinydb import AIOTinyDB
 
@@ -35,6 +36,7 @@ class Player:
 
         self.last_np = 0
         self.max_combo = 0
+        self.last_play: Score = None
 
         self.enqueue = [] # this is when the client wants to get other player's info or whatever
 

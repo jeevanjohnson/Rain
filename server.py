@@ -183,6 +183,7 @@ async def scoreSub(conn: Connection) -> bytes:
         bmap = await Beatmap.from_db(lambda beatmap: True if beatmap['md5'] == score.map_md5 else False)
     
     p: Player = cache.online[score.userid]
+    p.last_play = score
 
     if not bmap:
         ... # should never happen
@@ -199,10 +200,63 @@ async def scoreSub(conn: Connection) -> bytes:
             # TODO: Restrict or Ban the user depending on how many times they've been restricted
         
     if score.sub_type in (ScoreStatus.FAILED, ScoreStatus.BEST):
-        #TODO: get data off of here and use it someHOW
         conn.set_body(b'error: no')
         return conn.response
+    
+    if bmap['rankedstatus'] not in (ServerRankedStatus.Ranked, ServerRankedStatus.Pending): # check if map is loved
+
+        d = GameMode.to_db(p.mode)
+
+        chart = [ #TODO: change system for loved
+        "beatmapId:{mapid}|beatmapSetId:{setid}|beatmapPlaycount:0|beatmapPasscount:0|approvedDate:{approvedDate}".format(**bmap),
+        f"chartId:beatmap|chartUrl:https://osu.ppy.sh/b/{bmap['mapid']}|chartName:Beatmap Ranking|rankBefore:|rankAfter:|maxComboBefore:|maxComboAfter:|accuracyBefore:|accuracyAfter:|rankedScoreBefore:|rankedScoreAfter:0|ppBefore:|ppAfter:|onlineScoreId:{score.scoreID}",
+        f"chartId:overall|chartUrl:https://osu.ppy.sh/u/{p.userid}|chartName:Overall Ranking|rankBefore:|rankAfter:|rankedScoreBefore:0|rankedScoreAfter:0|totalScoreBefore:{p.stats.total_score}|totalScoreAfter:{p.stats.total_score + score.score}|maxComboBefore:|maxComboAfter:|accuracyBefore:|accuracyAfter:|ppBefore:|ppAfter:|achievements-new:|onlineScoreId:{score.scoreID}"
+        ]
+
+        with open(f'./data/replays/{score.scoreID}.osr', 'wb') as f:
+            f.write(
+                m[13][2][:-2]
+            )
+
+        p.stats.total_score +=  score.score
+
+        async with AIOTinyDB('./data/users.json') as DB:
         
+            for doc in (docs := DB.search(lambda x: x['userid'] == p.userid)):
+                if isinstance(d, tuple):
+                    doc[d[0]][d[1]]['pp'] = p.stats.pp
+                    doc[d[0]][d[1]]['acc'] = p.stats.acc
+                    doc[d[0]][d[1]]['playcount'] = p.stats.playcount
+                    doc[d[0]][d[1]]['total_score'] = p.stats.total_score
+                    doc[d[0]][d[1]]['ranked_score'] = p.stats.ranked_score
+                    doc[d[0]][d[1]]['max_combo'] = p.max_combo
+                    doc[d[0]][d[1]]['rank'] = p.stats.rank
+                else:
+                    doc[d]['pp'] = p.stats.pp
+                    doc[d]['acc'] = p.stats.acc
+                    doc[d]['playcount'] = p.stats.playcount
+                    doc[d]['total_score'] = p.stats.total_score
+                    doc[d]['ranked_score'] = p.stats.ranked_score
+                    doc[d]['max_combo'] = p.max_combo
+                    doc[d]['rank'] = p.stats.rank
+
+            DB.write_back(docs)
+        
+        p.enqueue.append(packets.userStats(p))
+
+        async with AIOTinyDB('./data/scores.json') as DB:
+            x = DB.get(lambda sc: True if sc == score.__dict__ else False)
+            if x:
+                ... #TODO: restrict for duplicated score
+            
+            DB.insert(score.__dict__)
+
+        if score.mods & Mods.RELAX or score.mods & Mods.AUTOPILOT:
+            conn.set_body(b'error: no')
+        else:
+            conn.set_body('\n'.join(chart).encode())
+        return conn.response
+
     if score.sub_type & ScoreStatus.SUBMITTED and \
     score.mods & Mods.RELAX or score.mods & Mods.AUTOPILOT:
         
@@ -263,7 +317,7 @@ async def scoreSub(conn: Connection) -> bytes:
         previous_maxCombo = p.max_combo
         p.max_combo = score.max_combo if score.max_combo and score.max_combo > p.max_combo else p.max_combo
 
-        p.stats.playcount += 1 # playcoun
+        p.stats.playcount += 1 # playcount
 
         previous_rank = p.stats.rank
 
