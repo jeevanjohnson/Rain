@@ -394,16 +394,18 @@ def logout(userID: int) -> bytes:
     )
 
 def userStats(p: 'Player') -> bytes:
-    if p.mode >= GameMode(4) and not p.mode & GameMode.ap_std:
+    if p.mode in (GameMode.rx_std, GameMode.rx_catch, GameMode.rx_taiko):
         p.mode -= 4
-        p.mode = GameMode(p.mode)
+        mode = GameMode(p.mode)
     elif p.mode == GameMode(7):
-        p.mode = GameMode(0)
+        mode = GameMode(0)
+    else:
+        mode = GameMode(p.mode)
     return write(
         PacketIDS.CHO_USER_STATS, 
         (p.userid, 'int'), (p.action, 'b'),
         (p.info_text, 'string'), (p.map_md5, 'string'),
-        (p.mods, 'int'), (p.mode, 'unB'),
+        (p.mods, 'int'), (mode, 'unB'),
         (p.map_id, 'int'), (p.stats.ranked_score, 'long_long'),
         (p.stats.acc / 100.0, 'float'), (p.stats.playcount, 'int'),
         (p.stats.total_score, 'long_long'), (p.stats.rank, 'int'),

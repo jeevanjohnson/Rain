@@ -76,11 +76,16 @@ class Score:
         s.passed = score_details[14] == 'True'
         s.playtime = int(time.time())
         s.sub_type = ScoreStatus.SUBMITTED if s.passed else ScoreStatus.FAILED
-        s.get_acc(int(s.mode))
+        if int(s.mode) > 3:
+            s.get_acc(int(s.mode) - 4)
+        elif int(s.mode) == 7:
+            s.get_acc(0)
+        else:
+            s.get_acc(s.mode)
 
-        if s.mods & Mods.RELAX:
+        if s.mode in (GameMode.vn_std, GameMode.vn_taiko, GameMode.vn_catch, GameMode.vn_mania) and s.mods & Mods.RELAX:
             s.mode = GameMode(s.mode + 4)
-        elif s.mods & Mods.AUTOPILOT:
+        elif s.mode in (GameMode.vn_std, GameMode.vn_taiko, GameMode.vn_catch, GameMode.vn_mania) and s.mods & Mods.AUTOPILOT:
             s.mode = GameMode(7)
         
         await s.calc_pp()

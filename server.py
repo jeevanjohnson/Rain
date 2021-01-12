@@ -66,7 +66,7 @@ async def accountCreation(conn: Connection) -> bytes:
         )
     
     async with USERS as DB:
-        if DB.get(lambda x: True if x['username'] == username else False):
+        if DB.get(lambda x: True if x['username'].lower() == username else False):
             errors['username'].append(
             'Username already exists!'
         )
@@ -203,7 +203,7 @@ async def scoreSub(conn: Connection) -> bytes:
         conn.set_body(b'error: no')
         return conn.response
         
-    if score.sub_type & ScoreStatus.SUBMITTED or \
+    if score.sub_type & ScoreStatus.SUBMITTED and \
     score.mods & Mods.RELAX or score.mods & Mods.AUTOPILOT:
         
         async with SCORES as DB:
@@ -217,13 +217,17 @@ async def scoreSub(conn: Connection) -> bytes:
         #     conn.set_body(b'error: no')
         #     return conn.response
         
-        if score.mods & Mods.RELAX:
+        if score.mode in (GameMode.vn_std, GameMode.vn_taiko, GameMode.vn_catch, GameMode.vn_mania) and score.mods & Mods.RELAX:
             p.mode = GameMode(p.mode + 4) 
-            d = Mods.RELAX
-        else:
+        elif score.mode in (GameMode.vn_std, GameMode.vn_taiko, GameMode.vn_catch, GameMode.vn_mania) and score.mods & Mods.AUTOPILOT:
             p.mode = GameMode(7)
             d = Mods.AUTOPILOT
-
+        
+        if score.mods & Mods.RELAX:
+            d = Mods.RELAX
+        elif score.mods & Mods.AUTOPILOT:
+            d = Mods.AUTOPILOT
+        
         previous_pp = p.stats.pp
         async with SCORES as DB:
             mm = DB.search(
