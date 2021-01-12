@@ -435,7 +435,6 @@ async def leaderboard(conn: Connection) -> bytes:
         p.mode = mode
         await p.update()
         p.enqueue.append(packets.userStats(p))
-        p.enqueue.append(packets.userPresence(p))
     
     lb = []
     async with BEATMAPS as DB:
