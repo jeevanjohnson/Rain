@@ -54,9 +54,12 @@ class Score:
             player = online[p['userid']]
         
         async with SCORES as DB:
-            alls = DB.all()
-        
-        s.scoreID = len(alls)
+            try:
+                alls = DB.all()
+                s.scoreID = len(alls)
+            except:
+                s.scoreID = 1
+
         s.mode = player.mode
         s.n300 = int(score_details[3])
         s.n100 = int(score_details[4])

@@ -200,7 +200,12 @@ async def scoreSub(conn: Connection) -> bytes:
             ...
             # TODO: Restrict or Ban the user depending on how many times they've been restricted
         
-    if not score.sub_type & ScoreStatus.SUBMITTED or \
+    if score.sub_type in (ScoreStatus.FAILED, ScoreStatus.BEST):
+        #TODO: get data off of here and use it someHOW
+        conn.set_body(b'error: no')
+        return conn.response
+        
+    if score.sub_type & ScoreStatus.SUBMITTED or \
     score.mods & Mods.RELAX or score.mods & Mods.AUTOPILOT:
         
         async with SCORES as DB:
@@ -293,7 +298,6 @@ async def scoreSub(conn: Connection) -> bytes:
             )
 
         conn.set_body(b'error: no')
-        printc(f'Submitted score for {p.username} Mods: {repr(score.mods)}')
         return conn.response
     
     with open(f'./data/replays/{score.scoreID}.osr', 'wb') as f:
