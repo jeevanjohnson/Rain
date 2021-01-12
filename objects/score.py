@@ -1,6 +1,6 @@
 from base64 import b64decode
 from typing import Union
-from helpers import BEATMAPS, SCORES, USERS
+from aiotinydb import AIOTinyDB
 from py3rijndael import RijndaelCbc, ZeroPadding
 from objects.const import Mods, ScoreStatus, GameMode, DICT_TO_CLASS
 from subprocess import run, PIPE
@@ -47,13 +47,13 @@ class Score:
         s.map_md5 = score_details[0]
         s.player_name = score_details[1].strip()
 
-        async with USERS as DB:
+        async with AIOTinyDB('./data/users.json') as DB:
             p = DB.get(lambda user: True if user['username'] == s.player_name else False)
             from cache import online
             s.userid = p['userid']
             player = online[p['userid']]
         
-        async with SCORES as DB:
+        async with AIOTinyDB('./data/scores.json') as DB:
             try:
                 alls = DB.all()
                 s.scoreID = len(alls)
@@ -101,7 +101,7 @@ class Score:
             self.pp = 0.0
             return # TODO?: add mania and ctb someday
 
-        async with BEATMAPS as DB:
+        async with AIOTinyDB('./data/beatmaps.json') as DB:
             beatmap = DB.get(lambda mapp: True if mapp['md5'] == self.map_md5 else False)
             if not beatmap:
                 self.pp = 0.0
@@ -205,7 +205,7 @@ class Score:
 # for bot
 async def oppai(mapid: int, mods: str, acc: Union[tuple, float] = (100.0, 99.0, 98.0, 97.0, 96.0)):
     msg = []
-    async with BEATMAPS as DB:
+    async with AIOTinyDB('./data/beatmaps.json') as DB:
         beatmap = DB.get(lambda mapp: True if mapp['mapid'] == mapid else False)
         if not beatmap:
             return ''

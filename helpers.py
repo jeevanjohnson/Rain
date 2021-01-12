@@ -1,8 +1,4 @@
 from aiotinydb import AIOTinyDB
-USERS = AIOTinyDB('./data/users.json')
-SCORES = AIOTinyDB('./data/scores.json')
-BEATMAPS = AIOTinyDB('./data/beatmaps.json')
-
 from typing import TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
@@ -65,7 +61,7 @@ async def get_rank_for_pp(pp: float, key: Union[tuple, str]) -> int:
         else:
             return sc[key[0]]['pp']
 
-    async with USERS as DB:
+    async with AIOTinyDB('./data/users.json') as DB:
         x = DB.all()
         x.append(fake_player)
         r = addRanks(sorted(x, key = s, reverse = True))

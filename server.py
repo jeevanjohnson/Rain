@@ -65,7 +65,7 @@ async def accountCreation(conn: Connection) -> bytes:
             'Username is too short. Please make a username of at least 4 character'
         )
     
-    async with USERS as DB:
+    async with AIOTinyDB('./data/users.json') as DB:
         if DB.get(lambda x: True if x['username'].lower() == username else False):
             errors['username'].append(
             'Username already exists!'
@@ -90,7 +90,7 @@ async def accountCreation(conn: Connection) -> bytes:
     
     if check == b'0':
         password = hashlib.md5(password).hexdigest()
-        async with USERS as db:
+        async with AIOTinyDB('./data/users.json') as db:
             users = db.all()
             db.insert({
                 'userid': len(users) + 4,
@@ -206,7 +206,7 @@ async def scoreSub(conn: Connection) -> bytes:
     if score.sub_type & ScoreStatus.SUBMITTED and \
     score.mods & Mods.RELAX or score.mods & Mods.AUTOPILOT:
         
-        async with SCORES as DB:
+        async with AIOTinyDB('./data/scores.json') as DB:
             x = DB.get(lambda sc: True if sc == score.__dict__ else False)
             if x:
                 ... # restrict for duplicated score
@@ -229,7 +229,7 @@ async def scoreSub(conn: Connection) -> bytes:
             d = Mods.AUTOPILOT
         
         previous_pp = p.stats.pp
-        async with SCORES as DB:
+        async with AIOTinyDB('./data/scores.json') as DB:
             mm = DB.search(
                 lambda x: True if x['userid'] == p.userid and x['mods'] & d and ScoreStatus(x['sub_type']) == ScoreStatus.SUBMITTED else False
             )
@@ -270,7 +270,7 @@ async def scoreSub(conn: Connection) -> bytes:
         d = GameMode.to_db(p.mode)
         p.stats.rank = await get_rank_for_pp(p.stats.pp, key = d) # rank
 
-        async with USERS as DB:
+        async with AIOTinyDB('./data/users.json') as DB:
         
             for doc in (docs := DB.search(lambda x: x['userid'] == p.userid)):
                 if isinstance(d, tuple):
@@ -316,7 +316,7 @@ async def scoreSub(conn: Connection) -> bytes:
         else:
             return False
     
-    async with SCORES as DB:
+    async with AIOTinyDB('./data/scores.json') as DB:
         scores = DB.search(x)
         scores = addRanks((xx := remove_duplicates(sorted(scores, key = lambda sc: sc['pp'], reverse = True))))
         scores = get_scores(p.userid, scores)
@@ -338,7 +338,7 @@ async def scoreSub(conn: Connection) -> bytes:
         )
 
     previous_pp = p.stats.pp
-    async with SCORES as DB:
+    async with AIOTinyDB('./data/scores.json') as DB:
         mm = DB.search(
             lambda x: True if x['userid'] == p.userid and not x['mods'] & Mods.RELAX and not x['mods'] & Mods.AUTOPILOT and ScoreStatus(x['sub_type']) == ScoreStatus.SUBMITTED else False
         )
@@ -379,7 +379,7 @@ async def scoreSub(conn: Connection) -> bytes:
     d = GameMode.to_db(p.mode)
     p.stats.rank = await get_rank_for_pp(p.stats.pp, key = d) # rank
 
-    async with USERS as DB:
+    async with AIOTinyDB('./data/users.json') as DB:
     
         for doc in (docs := DB.search(lambda x: x['userid'] == p.userid)):
             if isinstance(d, tuple):
@@ -408,7 +408,7 @@ async def scoreSub(conn: Connection) -> bytes:
         f"chartId:overall|chartUrl:https://osu.ppy.sh/u/{p.userid}|chartName:Overall Ranking|rankBefore:{previous_rank}|rankAfter:{p.stats.rank}|rankedScoreBefore:0|rankedScoreAfter:0|totalScoreBefore:{previous_tscore}|totalScoreAfter:{p.stats.total_score}|maxComboBefore:{previous_maxCombo}|maxComboAfter:{p.max_combo}|accuracyBefore:{previous_acc}|accuracyAfter:{p.stats.acc}|ppBefore:{previous_pp}|ppAfter:{p.stats.pp}|achievements-new:|onlineScoreId:{score.scoreID}"
     )
     
-    async with SCORES as DB:
+    async with AIOTinyDB('./data/scores.json') as DB:
         x = DB.get(lambda sc: True if sc == score.__dict__ else False)
         if x:
             ... #TODO: restrict for duplicated score
@@ -439,7 +439,7 @@ async def leaderboard(conn: Connection) -> bytes:
         p.enqueue.append(packets.userStats(p))
     
     lb = []
-    async with BEATMAPS as DB:
+    async with AIOTinyDB('./data/beatmaps.json') as DB:
         if map_md5 in cache.beatmap:
             m = cache.beatmap[map_md5]
             lb.append(f'{m["rankedstatus"]}|false')
@@ -615,7 +615,7 @@ async def privmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
 
     if msg[1].startswith("\x01ACTION"):
         x = regex['beatmap'].search(msg[1])
-        p.last_np = int(x['mapid'])
+        p.last_np = int(x['mapid'] or '0')
         if target.userid == 3: # if its the bot
             m = await oppai(p.last_np, Mods(p.mods).__repr__())
             body += packets.sendMessage(
@@ -792,7 +792,7 @@ async def login(conn: Connection) -> bytes:
     # 4 ?
     # 5 hardware data
 
-    async with USERS as DB:
+    async with AIOTinyDB('./data/users.json') as DB:
         x = DB.get(lambda x: True if x['username'] == credentials[0] else False)
         if not x:
             pass

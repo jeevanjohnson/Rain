@@ -1,6 +1,8 @@
+from objects.beatmap import Beatmap
 from typing import Union
 from objects.player import Player
-from objects.const import Privileges
+from objects.const import Privileges, RankedStatus, ServerRankedStatus
+from aiotinydb import AIOTinyDB
 from config import prefix
 import packets
 import json
@@ -23,6 +25,46 @@ async def alert(msg: dict, p: Player) -> str:
         x.enqueue.append(packets.notification(msg.replace(r'\n', '\n')))
     
     return 'Alert Sent!'
+
+@command(f'^\{prefix}map\ (?P<rankstatus>.*) (?P<map_or_set>.*)$', Privileges.Normal)
+async def mapedit(msg: dict, p: Player) -> str:
+    if msg['rankstatus'] not in ('rank', 'love', 'unrank') or msg['map_or_set'] not in ('map', 'set'):
+        return f'Invalid Syntax!\n{prefix}map [rank, love, unrank] [map, set]'
+    
+    from cache import beatmap
+    if msg['map_or_set'] == 'map':
+        async with AIOTinyDB('./data/beatmaps.json') as DB:
+            x = DB.search(lambda z: True if z['mapid'] == p.last_np else False)
+            if not x:
+                return "Map couldn't be found!" # should never happen
+            for doc in (docs := x):
+                md5 = doc['md5']
+                r = ServerRankedStatus.from_command(msg['rankstatus'])
+                doc['rankedstatus'] = r
+
+                if md5 in beatmap:
+                    beatmap[md5]['rankedstatus'] = r
+            
+            DB.write_back(docs)
+    else:
+        async with AIOTinyDB('./data/beatmaps.json') as DB:
+            x = DB.search(lambda z: True if z['mapid'] == p.last_np else False)
+            await Beatmap.download_from_setid(x[0]['setid'])
+            if not x:
+                return "Map couldn't be found!" # should never happen
+            x = DB.search(lambda z: True if z['setid'] == x[0]['setid'] else False)
+            for doc in (docs := x):
+                md5 = doc['md5']
+                r = ServerRankedStatus.from_command(msg['rankstatus'])
+                doc['rankedstatus'] = r
+
+                if md5 in beatmap:
+                    beatmap[md5]['rankedstatus'] = r
+            
+            DB.write_back(docs)
+
+    
+    return f'Ranked status was updated for https://osu.ppy.sh/b/{p.last_np}'
 
 @command(f'^\{prefix}py\ (?P<args>.*)', Privileges.Normal)
 async def py(msg: dict, p: Player) -> str:

@@ -162,6 +162,14 @@ class ServerRankedStatus(IntEnum):
     Loved = 5
 
     @staticmethod
+    def from_command(s: str):
+        return {
+            'rank': ServerRankedStatus.Ranked,
+            'love': ServerRankedStatus.Loved,
+            'unrank': ServerRankedStatus.Pending
+        }[s]
+
+    @staticmethod
     def from_api(status: int):
         return {
             -2: ServerRankedStatus.Pending,

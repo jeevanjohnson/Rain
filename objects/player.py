@@ -1,5 +1,5 @@
 from objects.const import *
-from helpers import USERS
+from aiotinydb import AIOTinyDB
 
 class Stats:
     def __init__(self) -> None:
@@ -49,7 +49,7 @@ class Player:
         return p
 
     async def update(self):
-        async with USERS as DB:
+        async with AIOTinyDB('./data/users.json') as DB:
             x = DB.get(lambda user: True if user['userid'] == self.userid else False)
             self.username = x['username']
             self._privileges = x['privs'] # if self.userid not in (3, 4) else x['privs'] + Privileges.Admin
