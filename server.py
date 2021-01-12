@@ -215,8 +215,10 @@ async def scoreSub(conn: Connection) -> bytes:
         #     return conn.response
         
         if score.mods & Mods.RELAX:
+            p.mode = GameMode(p.mode + 4) 
             d = Mods.RELAX
         else:
+            p.mode = GameMode(7)
             d = Mods.AUTOPILOT
 
         previous_pp = p.stats.pp
@@ -260,31 +262,26 @@ async def scoreSub(conn: Connection) -> bytes:
         p.stats.rank = await get_rank_for_pp(p.stats.pp, key = d) # rank
 
         async with USERS as DB:
-            if isinstance(d, tuple):
-                x = {d[0]: {d[1]: {
-                    'pp': p.stats.pp,
-                    'acc': p.stats.acc,
-                    'playcount': p.stats.playcount,
-                    'total_score': p.stats.total_score,
-                    'ranked_score': p.stats.ranked_score,
-                    'max_combo': p.max_combo,
-                    'rank': p.stats.rank
-                }}}
-            else:
-                x = {d: {
-                    'pp': p.stats.pp,
-                    'acc': p.stats.acc,
-                    'playcount': p.stats.playcount,
-                    'total_score': p.stats.total_score,
-                    'ranked_score': p.stats.ranked_score,
-                    'max_combo': p.max_combo,
-                    'rank': p.stats.rank
+        
+            for doc in (docs := DB.search(lambda x: x['userid'] == p.userid)):
+                if isinstance(d, tuple):
+                    doc[d[0]][d[1]]['pp'] = p.stats.pp
+                    doc[d[0]][d[1]]['acc'] = p.stats.acc
+                    doc[d[0]][d[1]]['playcount'] = p.stats.playcount
+                    doc[d[0]][d[1]]['total_score'] = p.stats.total_score
+                    doc[d[0]][d[1]]['ranked_score'] = p.stats.ranked_score
+                    doc[d[0]][d[1]]['max_combo'] = p.max_combo
+                    doc[d[0]][d[1]]['rank'] = p.stats.rank
+                else:
+                    doc[d]['pp'] = p.stats.pp
+                    doc[d]['acc'] = p.stats.acc
+                    doc[d]['playcount'] = p.stats.playcount
+                    doc[d]['total_score'] = p.stats.total_score
+                    doc[d]['ranked_score'] = p.stats.ranked_score
+                    doc[d]['max_combo'] = p.max_combo
+                    doc[d]['rank'] = p.stats.rank
 
-                }}
-        
-        
-            for doc in DB.search(lambda x: x['userid'] == p.userid):
-                print()
+            DB.write_back(docs)
         
         p.enqueue.append(packets.userStats(p))
         
@@ -372,29 +369,27 @@ async def scoreSub(conn: Connection) -> bytes:
     d = GameMode.to_db(p.mode)
     p.stats.rank = await get_rank_for_pp(p.stats.pp, key = d) # rank
 
-    if isinstance(d, tuple):
-        x = {d[0]: {d[1]: {
-            'pp': p.stats.pp,
-            'acc': p.stats.acc,
-            'playcount': p.stats.playcount,
-            'total_score': p.stats.total_score,
-            'ranked_score': p.stats.ranked_score,
-            'max_combo': p.max_combo,
-            'rank': p.stats.rank
-        }}}
-    else:
-        x = {d: {
-            'pp': p.stats.pp,
-            'acc': p.stats.acc,
-            'playcount': p.stats.playcount,
-            'total_score': p.stats.total_score,
-            'ranked_score': p.stats.ranked_score,
-            'max_combo': p.max_combo,
-            'rank': p.stats.rank
-        }}
-    
     async with USERS as DB:
-        DB.update(x, lambda x: x['userid'] == p.userid)
+    
+        for doc in (docs := DB.search(lambda x: x['userid'] == p.userid)):
+            if isinstance(d, tuple):
+                doc[d[0]][d[1]]['pp'] = p.stats.pp
+                doc[d[0]][d[1]]['acc'] = p.stats.acc
+                doc[d[0]][d[1]]['playcount'] = p.stats.playcount
+                doc[d[0]][d[1]]['total_score'] = p.stats.total_score
+                doc[d[0]][d[1]]['ranked_score'] = p.stats.ranked_score
+                doc[d[0]][d[1]]['max_combo'] = p.max_combo
+                doc[d[0]][d[1]]['rank'] = p.stats.rank
+            else:
+                doc[d]['pp'] = p.stats.pp
+                doc[d]['acc'] = p.stats.acc
+                doc[d]['playcount'] = p.stats.playcount
+                doc[d]['total_score'] = p.stats.total_score
+                doc[d]['ranked_score'] = p.stats.ranked_score
+                doc[d]['max_combo'] = p.max_combo
+                doc[d]['rank'] = p.stats.rank
+                
+        DB.write_back(docs)
     
     p.enqueue.append(packets.userStats(p))
 
