@@ -122,7 +122,7 @@ class Score:
             cmd.append(f'-touch')
         
         if self.mods and mods != 'NM':
-            cmd.append(f'+{mods.replace("RX", "")}')
+            cmd.append(f'+{mods.replace("RX", "").replace("AP", "")}')
         
         cmd.append(f'-ojson')
 
@@ -133,11 +133,12 @@ class Score:
         output = loads(process.stdout.decode('utf-8', errors='ignore'))
         self.pp = 0.0
 
-        if 'RX' not in mods: #
-            self.pp = output['pp']        # Make a proper
-        else:                             # pp system lmao
-            self.pp = output['speed_pp']  #
-        
+        if 'RX' in mods: 
+            self.pp = output['aim_pp'] 
+        elif 'AP' in mods:
+            self.pp = output['acc_pp']
+        else:
+            self.pp = output['pp']   
     
     def get_acc(self, mode: int):
         if mode == 0: # osu!
@@ -168,7 +169,7 @@ class Score:
         elif mode == 2:
             # osu!catch
             total = sum((self.n300, self.n100, self.n50,
-                            self.nkatu, self.nmiss))
+                            self.nkatus, self.nmiss))
 
             if total == 0:
                 self.acc = 0.0
@@ -183,7 +184,7 @@ class Score:
         elif mode == 3:
             # osu!mania
             total = sum((self.n300, self.n100, self.n50,
-                            self.ngeki, self.nkatu, self.nmiss))
+                            self.ngeki, self.nkatus, self.nmiss))
 
             if total == 0:
                 self.acc = 0.0
@@ -192,7 +193,7 @@ class Score:
             self.acc = 100.0 * sum((
                 self.n50 * 50.0,
                 self.n100 * 100.0,
-                self.nkatu * 200.0,
+                self.nkatus * 200.0,
                 (self.n300 + self.ngeki) * 300.0
             )) / (total * 300.0)
 

@@ -188,13 +188,13 @@ async def scoreSub(conn: Connection) -> bytes:
         ... # should never happen
     
     if not Privileges.Whitelisted & p.privileges and score.sub_type & ScoreStatus.SUBMITTED:
-
-        if p.mode in (GameMode.rx_std, GameMode.vn_std):
+        cap = ()
+        if p.mode in (GameMode.rx_std, GameMode.vn_std, GameMode.ap_std):
             cap = config.std_pp_cap
         elif p.mode in (GameMode.vn_taiko, GameMode.rx_taiko):
             cap = config.taiko_pp_cap
 
-        if cap and score.pp > cap[int(bool(score.mods & Mods.RELAX))]:
+        if cap and score.pp > cap[int(bool(score.mods & Mods.RELAX)) + int(bool(score.mods & Mods.AUTOPILOT))]:
             ...
             # TODO: Restrict or Ban the user depending on how many times they've been restricted
         
@@ -613,7 +613,7 @@ async def privmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
         x = regex['beatmap'].search(msg[1])
         p.last_np = int(x['mapid'])
         if target.userid == 3: # if its the bot
-            m = await oppai(p.last_np, Mods.readable(p.mods))
+            m = await oppai(p.last_np, Mods(p.mods).__repr__())
             body += packets.sendMessage(
                 target.username, m, p.username, target.userid
             )

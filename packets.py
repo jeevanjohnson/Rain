@@ -394,7 +394,7 @@ def logout(userID: int) -> bytes:
     )
 
 def userStats(p: 'Player') -> bytes:
-    if p.mode >= GameMode(4):
+    if p.mode >= GameMode(4) and not p.mode & GameMode.ap_std:
         p.mode -= 4
         p.mode = GameMode(p.mode)
     elif p.mode == GameMode(7):
