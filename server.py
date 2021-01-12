@@ -171,8 +171,6 @@ async def scoreSub(conn: Connection) -> bytes:
     # it sends cursor movements or frames as a proper word
     #TODO: check if map is loved/unranked 
     # if so don't update stats besides total score
-    #TODO: Check if the user didn't submit best score?
-    # im still thinking on how i could do this lol
     conn.set_status(200)
     m = conn.request['multipart']
     score = await Score.from_submission({
