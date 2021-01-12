@@ -228,12 +228,14 @@ async def scoreSub(conn: Connection) -> bytes:
             )
         
         # calc acc & pp
+        p.stats.pp = 0
+
         if not mm:
             p.stats.pp += round(score.pp)
             previous_acc = score.acc
             p.stats.acc = score.acc
         else:
-            for i, row in enumerate((allscores := sorted(mm, key = lambda sc: sc['pp'], reverse = True))):
+            for i, row in enumerate((allscores := remove_duplicatess(sorted(mm, key = lambda sc: sc['pp'], reverse = True)))):
                 p.stats.pp += row['pp'] * 0.95 ** i 
         
             p.stats.pp = round(p.stats.pp)
@@ -336,12 +338,14 @@ async def scoreSub(conn: Connection) -> bytes:
         )
     
     # calc acc & pp
+    p.stats.pp = 0
+
     if not mm:
         p.stats.pp += round(score.pp)
         previous_acc = score.acc
         p.stats.acc = score.acc
     else:
-        for i, row in enumerate((allscores := sorted(mm, key = lambda sc: sc['pp'], reverse = True))):
+        for i, row in enumerate((allscores := remove_duplicatess(sorted(mm, key = lambda sc: sc['pp'], reverse = True)))):
             p.stats.pp += row['pp'] * 0.95 ** i 
     
         p.stats.pp = round(p.stats.pp)
@@ -760,7 +764,7 @@ async def pong(conn: Connection, p: Union[Player, bool]) -> bytes:
 async def logout(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_status(200)
     if p:
-        if (time.time() - p.loginTime) < 2:
+        if (time.time() - p.loginTime) < 3:
             return b''
         del cache.online[p.userid]
         conn.set_body(packets.logout(p.userid))

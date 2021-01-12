@@ -11,6 +11,16 @@ if TYPE_CHECKING:
 def is_best_score(score: 'Score'):
     ...
 
+def remove_duplicatess(s: list) -> list:
+    temp = []
+    ss = []
+    for x in s:
+        if x['map_md5'] not in temp:
+            temp.append(x['map_md5'])
+            ss.append(x)
+    
+    return ss
+
 def remove_duplicates(s: list) -> list:
     temp = []
     ss = []
