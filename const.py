@@ -31,7 +31,6 @@ async def mapedit(msg: dict, p: Player) -> str:
     if msg['rankstatus'] not in ('rank', 'love', 'unrank') or msg['map_or_set'] not in ('map', 'set'):
         return f'Invalid Syntax!\n{prefix}map [rank, love, unrank] [map, set]'
     
-    from cache import beatmap
     if msg['map_or_set'] == 'map':
         async with AIOTinyDB('./data/beatmaps.json') as DB:
             x = DB.search(lambda z: True if z['mapid'] == p.last_np else False)
@@ -42,7 +41,11 @@ async def mapedit(msg: dict, p: Player) -> str:
                 r = ServerRankedStatus.from_command(msg['rankstatus'])
                 doc['rankedstatus'] = r
 
+                from cache import beatmap
                 if md5 in beatmap:
+                    beatmap[md5]['rankedstatus'] = r
+                else:
+                    beatmap[md5] = doc
                     beatmap[md5]['rankedstatus'] = r
             
             DB.write_back(docs)
@@ -58,7 +61,11 @@ async def mapedit(msg: dict, p: Player) -> str:
                 r = ServerRankedStatus.from_command(msg['rankstatus'])
                 doc['rankedstatus'] = r
 
+                from cache import beatmap
                 if md5 in beatmap:
+                    beatmap[md5]['rankedstatus'] = r
+                else:
+                    beatmap[md5] = doc
                     beatmap[md5]['rankedstatus'] = r
             
             DB.write_back(docs)
