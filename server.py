@@ -1,3 +1,4 @@
+from objects.leaderboards import Leaderboard
 from objects.score import Score
 from objects.beatmap import Beatmap
 from WebLamp import Connection, printc
@@ -510,8 +511,48 @@ async def leaderboard(conn: Connection) -> bytes:
         else:
             lb.append(f'{ServerRankedStatus.NotSubmitted}|false')
     
-    conn.set_body('\n'.join(lb).encode())
-    return conn.response
+    leader = Leaderboard()
+    leader.md5 = map_md5
+    leader.user = p
+    if mods & Mods.RELAX or mods & Mods.AUTOPILOT:
+        if mods & Mods.RELAX:
+            x = Mods.RELAX
+        else:
+            x = Mods.AUTOPILOT
+        cond = lambda score: score['pp']
+        Skey = lambda score: bool(
+            score['map_md5'] == map_md5 and 
+            score['passed'] and
+            GameMode(score['mode']) == mode and
+            Mods(score['mods']) & x and
+            ScoreStatus(score['sub_type']) == ScoreStatus.SUBMITTED
+        )
+    else:
+        cond = lambda score: score['score']
+        Skey = lambda score: bool(
+            score['map_md5'] == map_md5 and 
+            score['passed'] and
+            GameMode(score['mode']) == mode and
+            not Mods(score['mods']) & Mods.RELAX and
+            not Mods(score['mods']) & Mods.AUTOPILOT and
+            ScoreStatus(score['sub_type']) == ScoreStatus.SUBMITTED
+        )
+    
+    if rank_type == RankingType.Top:
+        await leader.from_top(Skey, cond)
+    elif rank_type == RankingType.Mods:
+        leader.mods = mods
+        await leader.from_mods(Skey, cond)
+    elif rank_type == RankingType.Friends:
+        leader.userids = tuple(p.friends)
+        await leader.from_friends(Skey, cond)
+    
+    if len(leader.lb) < 5:
+        conn.set_body('\n'.join(lb).encode())
+        return conn.response
+    else:
+        conn.set_body(repr(leader).encode())
+        return conn.response
 
 @s.handler(target = '/web/osu-search.php', domains = web)
 async def direct(conn: Connection) -> bytes:
