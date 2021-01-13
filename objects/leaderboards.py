@@ -29,7 +29,7 @@ class Leaderboard:
             "[bold:0,size:20]{artist_unicode}|{title_unicode}",
             "10.0"
         ]
-        self.layout: str = ("{scoreID}|{username}|{score}|"
+        self.layout: str = ("{scoreID}|{username}|{Score}|"
                             "{combo}|{n50}|{n100}|"
                             "{n300}|{nmiss}|{nkatus}|"
                             "{ngeki}|{perfect}|{mods}|{userid}|"
@@ -93,6 +93,7 @@ class Leaderboard:
             self.lb.append(
                 self.layout.format(
                     **userscores, username = userscores['player_name'],
+                    Score = round(userscores['score' if not self.mods & Mods.RELAX and not self.mods & Mods.RELAX else 'pp']),
                     combo = userscores['max_combo'],
                     rankofscoreonlb = userscores['rankOnLB'],
                     time = userscores['playtime'],
@@ -110,7 +111,9 @@ class Leaderboard:
                 has_r = 0
             self.lb.append(
                 self.layout.format(
-                    **row, username = row['player_name'],
+                    **row, 
+                    Score = round(row['score' if not self.mods & Mods.RELAX and not self.mods & Mods.RELAX else 'pp']), 
+                    username = row['player_name'],
                     combo = row['max_combo'],
                     rankofscoreonlb = r,
                     time = row['playtime'],

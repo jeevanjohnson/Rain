@@ -514,6 +514,7 @@ async def leaderboard(conn: Connection) -> bytes:
     leader = Leaderboard()
     leader.md5 = map_md5
     leader.user = p
+    leader.mods = mods
     if mods & Mods.RELAX or mods & Mods.AUTOPILOT:
         if mods & Mods.RELAX:
             x = Mods.RELAX
