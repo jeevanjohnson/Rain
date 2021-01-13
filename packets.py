@@ -394,9 +394,10 @@ def logout(userID: int) -> bytes:
     )
 
 def userStats(p: 'Player') -> bytes:
+    mode = p.mode
     if p.mode in (GameMode.rx_std, GameMode.rx_catch, GameMode.rx_taiko):
-        p.mode -= 4
-        mode = GameMode(p.mode)
+        mode -= 4
+        mode = GameMode(mode)
     elif p.mode == GameMode(7):
         mode = GameMode(0)
     else:

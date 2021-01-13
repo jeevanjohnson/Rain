@@ -186,6 +186,11 @@ async def scoreSub(conn: Connection) -> bytes:
     p: Player = cache.online[score.userid]
     p.last_play = score
 
+    if p.mode != score.mode:
+        p.mode = score.mode
+        await p.update()
+        p.enqueue.append(packets.userStats(p))
+
     if not bmap:
         ... # should never happen
     
