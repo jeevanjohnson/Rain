@@ -38,7 +38,7 @@ class Leaderboard:
         self.userids: tuple = None
         self.user: Player = None
     
-    async def from_top(self, Skey, scoring):
+    async def formatLB(self, Skey, scoring):
         def check(s):
             if Skey(s) and s['userid'] == self.user.userid:
                 return True
@@ -122,12 +122,6 @@ class Leaderboard:
                     has_replay = has_r
                 )
             )
-        
-    async def from_mods(self, cond):
-        ...
-    
-    async def from_friends(self, cond):
-        ...
 
     def __repr__(self) -> str:
         return '\n'.join(self.lb)

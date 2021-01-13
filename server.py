@@ -545,13 +545,20 @@ async def leaderboard(conn: Connection) -> bytes:
         )
     
     if rank_type == RankingType.Top:
-        await leader.from_top(Skey, cond)
+        await leader.formatLB(Skey, cond)
     elif rank_type == RankingType.Mods:
         leader.mods = mods
-        await leader.from_mods(Skey, cond)
+        Skey = lambda score: bool(
+            score['map_md5'] == map_md5 and 
+            score['passed'] and
+            GameMode(score['mode']) == mode and
+            Mods(score['mods']) == leader.mods and
+            ScoreStatus(score['sub_type']) == ScoreStatus.SUBMITTED
+        )
+        await leader.formatLB(Skey, cond)
     elif rank_type == RankingType.Friends:
         leader.userids = tuple(p.friends)
-        await leader.from_friends(Skey, cond)
+        await leader.formatLB(Skey, cond)
     
     if len(leader.lb) < 5:
         conn.set_body('\n'.join(lb).encode())
