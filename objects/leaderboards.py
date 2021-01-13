@@ -93,7 +93,7 @@ class Leaderboard:
             self.lb.append(
                 self.layout.format(
                     **userscores, username = userscores['player_name'],
-                    Score = round(userscores['score' if not self.mods & Mods.RELAX and not self.mods & Mods.RELAX else 'pp']),
+                    Score = round(userscores['score' if not self.mods & Mods.RELAX and not self.mods & Mods.AUTOPILOT else 'pp']),
                     combo = userscores['max_combo'],
                     rankofscoreonlb = userscores['rankOnLB'],
                     time = userscores['playtime'],
@@ -114,7 +114,7 @@ class Leaderboard:
             self.lb.append(
                 self.layout.format(
                     **row, 
-                    Score = round(row['score' if not self.mods & Mods.RELAX and not self.mods & Mods.RELAX else 'pp']), 
+                    Score = round(row['score' if not self.mods & Mods.RELAX and not self.mods & Mods.AUTOPILOT else 'pp']), 
                     username = row['player_name'],
                     combo = row['max_combo'],
                     rankofscoreonlb = r,
