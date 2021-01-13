@@ -103,6 +103,8 @@ class Leaderboard:
         else:
             self.lb.append('')
         
+        scores = scores[-50:]
+        
         for r, row in enumerate(scores):
             r += 1
             if os.path.exists(f'./data/replays/{row["scoreID"]}.osr'):
