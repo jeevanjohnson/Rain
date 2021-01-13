@@ -17,6 +17,8 @@ simulate_bancho_ranks = False # this is going to be a cool feature in this banch
 # so have 2 pp will be a 7 digit of so forth
 # would have to rewrite the player class a bit to make this work but its doable
 
+sesonal_backgrounds = []
+
 prefix = ''
 
 std_pp_cap = () # (reg cap, rx cap)

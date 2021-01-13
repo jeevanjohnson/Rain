@@ -567,6 +567,12 @@ async def leaderboard(conn: Connection) -> bytes:
         conn.set_body(repr(leader).encode())
         return conn.response
 
+@s.handler(target = '/web/osu-getseasonal.php', domains = web)
+async def seasonal(conn: Connection) -> bytes:
+    conn.set_status(200)
+    conn.set_body(json.dumps(config.sesonal_backgrounds).replace('\\','\/'))
+    return conn.response
+
 @s.handler(target = '/web/osu-getreplay.php', domains = web)
 async def getreplay(conn: Connection) -> bytes:
     params = conn.request['params']
