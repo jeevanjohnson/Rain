@@ -567,6 +567,20 @@ async def leaderboard(conn: Connection) -> bytes:
         conn.set_body(repr(leader).encode())
         return conn.response
 
+@s.handler(target = '/web/osu-getreplay.php', domains = web)
+async def getreplay(conn: Connection) -> bytes:
+    params = conn.request['params']
+    scoreid = params['c']
+    conn.set_status(200)
+    
+    if not os.path.exists(f'./data/replays/{scoreid}.osr'):
+        conn.set_body(b'error: no')
+    else:
+        with open(f'./data/replays/{scoreid}.osr', 'rb') as f:
+            conn.set_body(f.read())
+    
+    return conn.response
+
 @s.handler(target = '/web/osu-search.php', domains = web)
 async def direct(conn: Connection) -> bytes:
     args = conn.request['params']
