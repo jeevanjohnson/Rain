@@ -5,11 +5,13 @@ to it being old and i can improve it now
 """
 
 from enum import IntEnum
+from helpers import request_bancho_pp
 from objects.const import Action, GameMode, Mods
 import struct
 from functools import lru_cache
 from typing import Union
 from objects.player import Player
+from config import simulate_bancho_ranks
 
 """
 Packets from the client and the server sending them are
@@ -225,6 +227,8 @@ def read_packet(data: bytes, type: str):
         decoded_data = x.read_string() 
     elif type == 'string':
         decoded_data = x.read_string() 
+    elif type == 'userid':
+        decoded_data = x.read_int() 
     else:
         Exception("Can't read data")
     
@@ -402,6 +406,10 @@ def userStats(p: 'Player') -> bytes:
         mode = GameMode(0)
     else:
         mode = GameMode(p.mode)
+    if simulate_bancho_ranks[0]:
+        x = request_bancho_pp(p.stats.pp, simulate_bancho_ranks[1], mode)
+        p.stats.rank = x['rank']
+
     return write(
         PacketIDS.CHO_USER_STATS, 
         (p.userid, 'int'), (p.action, 'b'),

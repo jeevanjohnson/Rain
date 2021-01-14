@@ -21,6 +21,7 @@ import time
 import hashlib 
 import re
 import json
+import bcrypt
 
 regex = {
     'email': re.compile(r'^\w+@\w+.\w+$'),
@@ -91,16 +92,18 @@ async def accountCreation(conn: Connection) -> bytes:
     
     if check == b'0':
         password = hashlib.md5(password).hexdigest()
+        password = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
         async with AIOTinyDB('./data/users.json') as db:
             users = db.all()
             db.insert({
                 'userid': len(users) + 4,
                 'username': username,
-                'passwordmd5': password,
+                'password': password.decode(),
                 'email': email,
                 'version': 0,
                 'hwidMd5': [],
                 'privs': 1,
+                'friends': [],
                 'std': {
                     'reg': {
                         'ranked_score': 0, 'acc': 0, 
@@ -174,9 +177,22 @@ async def scoreSub(conn: Connection) -> bytes:
     # if so don't update stats besides total score
     conn.set_status(200)
     m = conn.request['multipart']
+    iv = score = osuver = None
+    for x in m:
+        man = m[x]
+        if man[0]['name'] == 'iv':
+            iv = man[1][:-2]
+        elif man[0]['name'] == 'score' and x == 3:
+            score = man[1][:-2]
+        elif man[0]['name'] == 'osuver':
+            osuver = man[1][:-2]
+        
+        if iv and score and osuver:
+            break
+
     score = await Score.from_submission({
-        'iv': m[12][1][:-2], 'score': m[3][1][:-2],
-        'osuver': m[9][1][:-2]
+        'iv': iv, 'score': score,
+        'osuver': osuver
     })
     if score.map_md5 in cache.beatmap:
         bmap = cache.beatmap[score.map_md5]
@@ -534,7 +550,7 @@ async def leaderboard(conn: Connection) -> bytes:
             ScoreStatus(score['sub_type']) == ScoreStatus.SUBMITTED
         )
     else:
-        cond = lambda score: score['score']
+        cond = lambda score: score['pp']
         Skey = lambda score: bool(
             score['map_md5'] == map_md5 and 
             score['passed'] and
@@ -628,6 +644,37 @@ async def direct(conn: Connection) -> bytes:
 
     conn.set_status(200)
     conn.set_body('\n'.join(maps).encode())
+    return conn.response
+
+@s.handler(target = '/web/osu-getfriends.php', domains = web)
+async def getFriends(conn: Connection) -> bytes:
+    name = conn.request['params']['u']
+    p: Player = await cache.from_name(name)
+    if not p:
+        return b''
+    conn.set_status(200)
+    conn.set_body('\n'.join([str(x) for x in p.friends]).encode())
+    return conn.response
+
+@s.handler(target = PacketIDS.OSU_FRIEND_ADD, domains = bancho)
+async def addfriend(conn: Connection, p: Union[Player, bool]) -> bytes:
+    conn.set_status(200)
+    body = b''
+    if not p:
+        body += packets.notification('Server restarting!') 
+        body += packets.systemRestart()
+        conn.set_body(body)
+        return conn.response
+    if p.enqueue:
+        for x in p.enqueue:
+            body += x
+        p.enqueue = []
+    userid = packets.read_packet(conn.request['body'], 'userid')
+    if userid not in p.friends:
+        p.friends.append(userid)
+        await p.update_friends()
+    
+    conn.set_body(b'')
     return conn.response
 
 @s.handler(target = PacketIDS.OSU_RECEIVE_UPDATES, domains = bancho)
@@ -924,7 +971,7 @@ async def login(conn: Connection) -> bytes:
         x = DB.get(lambda x: True if x['username'] == credentials[0] else False)
         if not x:
             pass
-        elif x and (x['username'], x['passwordmd5']) == (credentials[0], credentials[1]):
+        elif bcrypt.checkpw(credentials[1].encode(), x['password'].encode()):
             userid = x['userid']
         
     if userid < 0:

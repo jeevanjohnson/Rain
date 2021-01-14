@@ -50,6 +50,12 @@ class Player:
             # like direct
             p |= (ClientPrivileges.Player | ClientPrivileges.Supporter)
         return p
+    
+    async def update_friends(self):
+        async with AIOTinyDB('./data/users.json') as DB:
+            for doc in (docs := DB.search(lambda x: x['userid'] == self.userid)):
+                doc['friends'] = self.friends
+            DB.write_back(docs)
 
     async def update(self):
         async with AIOTinyDB('./data/users.json') as DB:
@@ -57,6 +63,7 @@ class Player:
             self.username = x['username']
             self._privileges = x['privs'] # if self.userid not in (3, 4) else x['privs'] + Privileges.Admin
             self.privileges = Privileges(self._privileges)
+            self.friends = x['friends']
 
             d = GameMode.to_db(self.mode)
             if isinstance(d, tuple):

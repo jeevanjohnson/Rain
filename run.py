@@ -10,7 +10,7 @@ if not os.path.exists(p):
     os.mkdir(p)
 p += '/'
 for x in (f'{p}replays', f'{p}beatmaps', f'{p}screenshots', f'{p}avatars'):
-    if x == f'{p}beatmaps':
+    if x == f'{p}beatmaps': # or x == f'{p}replays':
         shutil.rmtree(x)
     if not os.path.exists(x):
         os.mkdir(x)

@@ -28,7 +28,9 @@ class Beatmap:
     @staticmethod
     async def from_db(key) -> dict:
         async with AIOTinyDB('./data/beatmaps.json') as DB:
-            return DB.get(key).copy()
+            if not (m := DB.get(key).copy()):
+                raise Exception("Map can't be found!")
+            return m
         
     @staticmethod
     async def download_from_setid(setid: int):
