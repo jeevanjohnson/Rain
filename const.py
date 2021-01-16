@@ -1,7 +1,6 @@
-from objects.beatmap import Beatmap
-from typing import Union
-from objects.player import Player
 from objects.const import Privileges, RankedStatus, ServerRankedStatus
+from objects.beatmap import Beatmap
+from objects.player import Player
 from aiotinydb import AIOTinyDB
 from config import prefix
 import packets
@@ -32,7 +31,7 @@ async def mapedit(msg: dict, p: Player) -> str:
         return f'Invalid Syntax!\n{prefix}map [rank, love, unrank] [map, set]'
     
     if msg['map_or_set'] == 'map':
-        async with AIOTinyDB('./data/beatmaps.json') as DB:
+        async with AIOTinyDB(config.beatamp_path) as DB:
             x = DB.search(lambda z: True if z['mapid'] == p.last_np else False)
             if not x:
                 return "Map couldn't be found!" # should never happen
@@ -50,7 +49,7 @@ async def mapedit(msg: dict, p: Player) -> str:
             
             DB.write_back(docs)
     else:
-        async with AIOTinyDB('./data/beatmaps.json') as DB:
+        async with AIOTinyDB(config.beatamp_path) as DB:
             x = DB.search(lambda z: True if z['mapid'] == p.last_np else False)
             await Beatmap.download_from_setid(x[0]['setid'])
             if not x:
@@ -102,4 +101,4 @@ async def process_cmd(msg: str, p: Player) -> str:
         return await commands[x](m.groupdict(), p)
 
 
-    return None
+    return 'Command not found.'

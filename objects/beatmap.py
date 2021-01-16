@@ -27,7 +27,7 @@ class Beatmap:
     
     @staticmethod
     async def from_db(key) -> dict:
-        async with AIOTinyDB('./data/beatmaps.json') as DB:
+        async with AIOTinyDB(config.beatamp_path) as DB:
             if not (m := DB.get(key).copy()):
                 raise Exception("Map can't be found!")
             return m
@@ -71,7 +71,7 @@ class Beatmap:
             with open(f'./data/beatmaps/{b.filename}', 'wb') as f:
                 f.write(r)
             
-            async with AIOTinyDB('./data/beatmaps.json') as DB:
+            async with AIOTinyDB(config.beatamp_path) as DB:
                 DB.insert(b.__dict__)
         
     @staticmethod

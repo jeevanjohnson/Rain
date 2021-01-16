@@ -101,7 +101,7 @@ class Score:
             self.pp = 0.0
             return # TODO?: add mania and ctb someday
 
-        async with AIOTinyDB('./data/beatmaps.json') as DB:
+        async with AIOTinyDB(config.beatamp_path) as DB:
             beatmap = DB.get(lambda mapp: True if mapp['md5'] == self.map_md5 else False)
             if not beatmap:
                 self.pp = 0.0
@@ -117,7 +117,7 @@ class Score:
         cmd.append(f'{self.nmiss}xmiss')
         cmd.append(f'{self.max_combo}x')
 
-        mods = self.mods.__repr__()
+        mods = repr(self.mods)
 
         if self.mode in (1, 5): # taiko, taikorx
             cmd.append(f'-m1')
@@ -138,9 +138,9 @@ class Score:
         output = loads(process.stdout.decode('utf-8', errors='ignore'))
         self.pp = 0.0
 
-        if 'RX' in mods: 
+        if self.mods & Mods.RELAX: 
             self.pp = output['aim_pp'] 
-        elif 'AP' in mods:
+        elif self.mods & Mods.AUTOPILOT:
             self.pp = output['acc_pp']
         else:
             self.pp = output['pp']   
@@ -205,7 +205,7 @@ class Score:
 # for bot
 async def oppai(mapid: int, mods: str, acc: Union[tuple, float] = (100.0, 99.0, 98.0, 97.0, 96.0)):
     msg = []
-    async with AIOTinyDB('./data/beatmaps.json') as DB:
+    async with AIOTinyDB(config.beatamp_path) as DB:
         beatmap = DB.get(lambda mapp: True if mapp['mapid'] == mapid else False)
         if not beatmap:
             return ''

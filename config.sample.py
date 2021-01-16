@@ -1,5 +1,9 @@
 socket_type = ("127.0.0.1", 5000)
 
+user_path = './data/users.json'
+beatamp_path = './data/beatmaps.json'
+scores_path = './data/scores.json'
+
 menuicon = (
     '', # url to image
     ''  # when image clicked link
@@ -12,7 +16,7 @@ api_keys = {
     'beatconnect': "..." # beatconnect api key | you can get from here https://beatconnect.io/accounts/signup/
 }
 
-simulate_bancho_ranks = (False, '') # (enable/disable, 'apikey')
+simulate_bancho_ranks = (False, '') # (enable/disable, 'apikey') TODO: FINISH ITS NOT DONE
 # this is going to be a cool feature in this bancho
 # this will pretty much simulate your pp amount on std as if you were on bancho 
 # so have 2 pp will be a 7 digit of so forth

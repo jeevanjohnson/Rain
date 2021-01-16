@@ -3,15 +3,14 @@ This section needs SO MUCH rewriting due
 to it being old and i can improve it now
 + its unfinished lmao
 """
-
-from enum import IntEnum
-from helpers import request_bancho_pp
 from objects.const import Action, GameMode, Mods
-import struct
-from functools import lru_cache
-from typing import Union
-from objects.player import Player
 from config import simulate_bancho_ranks
+from helpers import request_bancho_pp
+from objects.player import Player
+from functools import lru_cache
+from enum import IntEnum
+from typing import Union
+import struct
 
 """
 Packets from the client and the server sending them are
@@ -230,13 +229,12 @@ def read_packet(data: bytes, type: str):
     elif type == 'userid':
         decoded_data = x.read_int() 
     else:
-        Exception("Can't read data")
+        raise Exception("Can't read data")
     
     return decoded_data
 
 class PacketReader:
     def __init__(self, data: bytes) -> None:
-        # reference from coover import Replay
         self._data = data
         self.offset = 0
         self.packetID = self.read_packetID()
@@ -274,20 +272,17 @@ class PacketReader:
             'action': Action(self.read_unsigned_byte()), # 'unB',
             'info_text': self.read_string(), # 'string',
             'map_md5': self.read_string(), # 'string',
-            'mods': self.read_unsigned_int(), # 'unI',
+            'mods': Mods(self.read_unsigned_int()), # 'unI',
             'mode': self.read_unsigned_byte(), # 'unB',
             'map_id': self.read_int() # 'int',
         }
-        a['mods'] = m = Mods(a['mods'])
-        if not (readableMods := m.__repr__()):
-            a['mods'] = 0
-        elif 'RX' in readableMods:
-            a['mode'] += 4
-        elif 'AP' in readableMods:
-           a['mode'] = 7
+
+        if a['mods'] & Mods.RELAX:
+            a['mode'] = GameMode(a['mode'] + 4)
+        elif a['mods'] & Mods.AUTOPILOT:
+           a['mode'] = GameMode.ap_std
         
         a['mode'] = GameMode(a['mode'])
-        a['mods'] = Mods(a['mods'])
 
         return a
 
@@ -371,7 +366,6 @@ class PacketReader:
         val = self.data[:length]
         self.offset += length
         return val
-    
 
 def channelStart():
     return write(PacketIDS.CHO_CHANNEL_INFO_END)

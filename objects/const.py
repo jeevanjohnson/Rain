@@ -19,6 +19,8 @@ class PresenceFilter(IntEnum):
     All     = 1
     Friends = 2
 
+members = PresenceFilter.__members__.values()
+
 @unique
 class RankingType(IntEnum):
     Local   = 0

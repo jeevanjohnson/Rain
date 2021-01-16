@@ -1,27 +1,26 @@
+from WebLamp import Connection, printc, Colors
 from objects.leaderboards import Leaderboard
-from objects.score import Score
 from objects.beatmap import Beatmap
-from WebLamp import Connection, printc
-from WebLamp.utlies import Colors
 from serverwrapper import OsuServer
-from packets import PacketIDS
-from typing import Union
 from objects.player import Player
+from objects.score import Score
+from functools import lru_cache
+from objects.score import oppai
+from packets import PacketIDS
+from const import process_cmd
 from objects.const import *
 from helpers import *
-from functools import lru_cache
-from const import process_cmd
-from objects.score import oppai
+import asyncio
 import aiohttp
 import packets
+import hashlib 
+import bcrypt
 import config
-import os
 import cache
 import time
-import hashlib 
-import re
 import json
-import bcrypt
+import re
+import os
 
 regex = {
     'email': re.compile(r'^\w+@\w+.\w+$'),
@@ -29,11 +28,6 @@ regex = {
 }
 
 s = OsuServer()
-bancho = ("c.ppy.sh", "c4.ppy.sh", "c5.ppy.sh", "c6.ppy.sh")
-web = ["osu.ppy.sh"]
-avatar = ["a.ppy.sh"]
-
-DIRECT_API = "https://beatconnect.io/api"
 
 loginMsg = '\n'.join([
     "Welcome to Rain!",
@@ -43,22 +37,20 @@ loginMsg = '\n'.join([
     "There are currently {} online users"
 ])
 
-@s.handler(target = '/users', domains = web, method = ['POST'])
+@s.handler('/users')
 async def accountCreation(conn: Connection) -> bytes:
-    body = b''
     errors = {
         'username': [],
         'user_email': [],
         'password': [],
     }
 
-    credentials = conn.request['multipart']
-    username = credentials[1][1][:-2]
-    email = credentials[2][1][:-2]
-    password = credentials[3][1][:-2]
-    check = credentials[4][1][:-2] # idk what this does for now
+    credentials = conn.request['multipart'].data
+    username = credentials[0][1]
+    email = credentials[1][1]
+    password = credentials[2][1]
+    check = credentials[3][1]
 
-    # you would have to do more checks but im not gonna do that lol
     if not regex['email'].match((email := email.decode())):
         errors['user_email'].append('Please enter a valid email.')
     
@@ -67,7 +59,7 @@ async def accountCreation(conn: Connection) -> bytes:
             'Username is too short. Please make a username of at least 4 character'
         )
     
-    async with AIOTinyDB('./data/users.json') as DB:
+    async with AIOTinyDB(config.user_path) as DB:
         if DB.get(lambda x: True if x['username'].lower() == username else False):
             errors['username'].append(
             'Username already exists!'
@@ -77,23 +69,23 @@ async def accountCreation(conn: Connection) -> bytes:
             'email already exists! Are you sure your making your first account ever? :D'
         )
     
-    if len(password.decode()) < 2:
+    if len(password.decode()) < 2: # TODO: change to 8
         errors['password'].append(
             'Password is too short. Please make a password of at least 2 character'
         )
     
-    if True in [bool(errors[x]) for x in errors]:
+    if any(errors.values()):
         conn.set_status(400)
-        body += json.dumps(
+        body = json.dumps(
             {'form_error': {'user': errors}}
         ).encode()
         conn.set_body(body)
-        return conn.response
+        return conn
     
     if check == b'0':
         password = hashlib.md5(password).hexdigest()
         password = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-        async with AIOTinyDB('./data/users.json') as db:
+        async with AIOTinyDB(config.user_path) as db:
             users = db.all()
             db.insert({
                 'userid': len(users) + 4,
@@ -160,35 +152,35 @@ async def accountCreation(conn: Connection) -> bytes:
                     }
                 })
         printc(f'{username} has registered an account!', Colors.Blue)
-        body += b'ok'
-    else:
-        body += b'ok'
     
     conn.set_status(200)
-    conn.set_body(body)
-    return conn.response
+    conn.set_body(b'ok')
+    return conn
 
-@s.handler(target = '/web/osu-submit-modular-selector.php', domains = web)
+@s.handler('/web/osu-submit-modular-selector.php')
 async def scoreSub(conn: Connection) -> bytes:
     # When osu sends 'replay bytes'
     # it doesn't actually send replay  bytes
     # it sends cursor movements or frames as a proper word
-    #TODO: check if map is loved/unranked 
+    #TODO: check if map is loved 
     # if so don't update stats besides total score
     conn.set_status(200)
-    m = conn.request['multipart']
+    if 'multipart' not in conn.request:
+        conn.set_body(b'')
+        return conn
+    m = conn.request['multipart'].data
     iv = score = osuver = None
-    for x in m:
-        man = m[x]
-        if man[0]['name'] == 'iv':
-            iv = man[1][:-2]
-        elif man[0]['name'] == 'score' and x == 3:
-            score = man[1][:-2]
-        elif man[0]['name'] == 'osuver':
-            osuver = man[1][:-2]
-        
-        if iv and score and osuver:
-            break
+    for index, x in enumerate(m):
+        if 'iv' in x:
+            iv = m[index][1]
+        elif 'score' in x and index > 3:
+            score = m[index][1]
+        elif 'osuver' in x:
+            osuver = m[index][1]
+    
+    if not iv or score or osuver:
+        conn.set_body(b'')
+        return conn
 
     score = await Score.from_submission({
         'iv': iv, 'score': score,
@@ -223,7 +215,7 @@ async def scoreSub(conn: Connection) -> bytes:
         
     if score.sub_type in (ScoreStatus.FAILED, ScoreStatus.BEST):
         conn.set_body(b'error: no')
-        return conn.response
+        return conn
     
     if bmap['rankedstatus'] not in (ServerRankedStatus.Ranked, ServerRankedStatus.Pending): # check if map is loved
 
@@ -237,12 +229,12 @@ async def scoreSub(conn: Connection) -> bytes:
 
         with open(f'./data/replays/{score.scoreID}.osr', 'wb') as f:
             f.write(
-                m[13][2][:-2]
+                m[12][2]
             )
 
         p.stats.total_score +=  score.score
 
-        async with AIOTinyDB('./data/users.json') as DB:
+        async with AIOTinyDB(config.user_path) as DB:
         
             for doc in (docs := DB.search(lambda x: x['userid'] == p.userid)):
                 if isinstance(d, tuple):
@@ -277,7 +269,7 @@ async def scoreSub(conn: Connection) -> bytes:
             conn.set_body(b'error: no')
         else:
             conn.set_body('\n'.join(chart).encode())
-        return conn.response
+        return conn
 
     if score.sub_type & ScoreStatus.SUBMITTED and \
     score.mods & Mods.RELAX or score.mods & Mods.AUTOPILOT:
@@ -346,7 +338,7 @@ async def scoreSub(conn: Connection) -> bytes:
         d = GameMode.to_db(p.mode)
         p.stats.rank = await get_rank_for_pp(p.stats.pp, key = d) # rank
 
-        async with AIOTinyDB('./data/users.json') as DB:
+        async with AIOTinyDB(config.user_path) as DB:
         
             for doc in (docs := DB.search(lambda x: x['userid'] == p.userid)):
                 if isinstance(d, tuple):
@@ -372,15 +364,15 @@ async def scoreSub(conn: Connection) -> bytes:
         
         with open(f'./data/replays/{score.scoreID}.osr', 'wb') as f:
             f.write(
-                m[13][2][:-2]
+                m[12][2]
             )
 
         conn.set_body(b'error: no')
-        return conn.response
+        return conn
     
     with open(f'./data/replays/{score.scoreID}.osr', 'wb') as f:
         f.write(
-            m[13][2][:-2]
+            m[12][2]
         )
     
     def x(scare):
@@ -455,7 +447,7 @@ async def scoreSub(conn: Connection) -> bytes:
     d = GameMode.to_db(p.mode)
     p.stats.rank = await get_rank_for_pp(p.stats.pp, key = d) # rank
 
-    async with AIOTinyDB('./data/users.json') as DB:
+    async with AIOTinyDB(config.user_path) as DB:
     
         for doc in (docs := DB.search(lambda x: x['userid'] == p.userid)):
             if isinstance(d, tuple):
@@ -492,16 +484,16 @@ async def scoreSub(conn: Connection) -> bytes:
         DB.insert(score.__dict__)
 
     conn.set_body('\n'.join(chart).encode())
-    return conn.response
+    return conn
 
-@s.handler(target = '/web/osu-osz2-getscores.php', domains = web)
+@s.handler('/web/osu-osz2-getscores.php')
 async def leaderboard(conn: Connection) -> bytes:
     conn.set_status(200)
-    body = b''
     params = conn.request['params']
     p: Player = await cache.from_name(params['us'])
     if not p:
-        return b''
+        conn.set_body(b'')
+        return conn
     map_md5 = params['c']
     mods = Mods(int(params['mods']))
     mode = GameMode.from_params(int(params['m']), mods)
@@ -515,7 +507,7 @@ async def leaderboard(conn: Connection) -> bytes:
         p.enqueue.append(packets.userStats(p))
     
     lb = []
-    async with AIOTinyDB('./data/beatmaps.json') as DB:
+    async with AIOTinyDB(config.beatamp_path) as DB:
         if map_md5 in cache.beatmap:
             m = cache.beatmap[map_md5]
             lb.append(f'{m["rankedstatus"]}|false')
@@ -575,21 +567,24 @@ async def leaderboard(conn: Connection) -> bytes:
     elif rank_type == RankingType.Friends:
         leader.userids = tuple(p.friends)
         await leader.formatLB(Skey, cond)
+    elif rank_type == RankingType.Country:
+        leader.country = p.country[1]
+        await leader.formatLB(Skey, cond)
     
     if len(leader.lb) < 5:
         conn.set_body('\n'.join(lb).encode())
-        return conn.response
+        return conn
     else:
         conn.set_body(repr(leader).encode())
-        return conn.response
+        return conn
 
-@s.handler(target = '/web/osu-getseasonal.php', domains = web)
+@s.handler('/web/osu-getseasonal.php')
 async def seasonal(conn: Connection) -> bytes:
     conn.set_status(200)
     conn.set_body(json.dumps(config.sesonal_backgrounds).replace('\\','\/'))
-    return conn.response
+    return conn
 
-@s.handler(target = '/web/osu-getreplay.php', domains = web)
+@s.handler('/web/osu-getreplay.php')
 async def getreplay(conn: Connection) -> bytes:
     params = conn.request['params']
     scoreid = params['c']
@@ -601,9 +596,9 @@ async def getreplay(conn: Connection) -> bytes:
         with open(f'./data/replays/{scoreid}.osr', 'rb') as f:
             conn.set_body(f.read())
     
-    return conn.response
+    return conn
 
-@s.handler(target = '/web/osu-search.php', domains = web)
+@s.handler('/web/osu-search.php')
 async def direct(conn: Connection) -> bytes:
     args = conn.request['params']
     url = f'{config.mirror}/api/search/'
@@ -644,155 +639,100 @@ async def direct(conn: Connection) -> bytes:
 
     conn.set_status(200)
     conn.set_body('\n'.join(maps).encode())
-    return conn.response
+    return conn
 
-@s.handler(target = '/web/osu-getfriends.php', domains = web)
+@s.handler('/web/osu-getfriends.php')
 async def getFriends(conn: Connection) -> bytes:
+    # TODO: make it work
     name = conn.request['params']['u']
     p: Player = await cache.from_name(name)
-    if not p:
-        return b''
     conn.set_status(200)
+    if not p:
+        conn.set_body(b'')
+        return conn
+    
     conn.set_body('\n'.join([str(x) for x in p.friends]).encode())
-    return conn.response
+    return conn
 
-@s.handler(target = PacketIDS.OSU_FRIEND_ADD, domains = bancho)
+@s.handler(PacketIDS.OSU_FRIEND_ADD)
 async def addfriend(conn: Connection, p: Union[Player, bool]) -> bytes:
-    conn.set_status(200)
-    body = b''
-    if not p:
-        body += packets.notification('Server restarting!') 
-        body += packets.systemRestart()
-        conn.set_body(body)
-        return conn.response
-    if p.enqueue:
-        for x in p.enqueue:
-            body += x
-        p.enqueue = []
+
     userid = packets.read_packet(conn.request['body'], 'userid')
     if userid not in p.friends:
         p.friends.append(userid)
         await p.update_friends()
     
-    conn.set_body(b'')
-    return conn.response
-
-@s.handler(target = PacketIDS.OSU_RECEIVE_UPDATES, domains = bancho)
-async def receiveUpdates(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_status(200)
-    body = b''
-    if not p:
-        body += packets.notification('Server restarting!') 
-        body += packets.systemRestart()
-        conn.set_body(body)
-        return conn.response
-    if p.enqueue:
-        for x in p.enqueue:
-            body += x
-        p.enqueue = []
+    conn.set_body(b'')
+    return conn
+
+@s.handler(PacketIDS.OSU_RECEIVE_UPDATES)
+async def receiveUpdates(conn: Connection, p: Player) -> bytes:
+    # I think it properly works?
 
     value = packets.read_packet(conn.request['body'], 'updates')
-    if value not in list(PresenceFilter):
-        return b''
-    
-    p.pres_filter = PresenceFilter(value)
-    conn.set_body(body)
-    return conn.response
-
-@s.handler(target = PacketIDS.OSU_PART_LOBBY, domains = bancho)
-async def partLobby(conn: Connection, p: Union[Player, bool]) -> bytes:
-    # get out of lobby?
     conn.set_status(200)
-    body = b''
-    if not p:
-        body += packets.notification('Server restarting!') 
-        body += packets.systemRestart()
-        conn.set_body(body)
-        return conn.response
-    
+    conn.set_body(b'')
+
+    if value in members:
+        p.pres_filter = PresenceFilter(value)
+
+    return conn
+
+@s.handler(PacketIDS.OSU_PART_LOBBY)
+async def partLobby(conn: Connection, p: Player) -> bytes:
     print(PacketIDS.OSU_PART_LOBBY.name)
 
-    conn.set_body(body)
-    return conn.response
-
-@s.handler(target = PacketIDS.OSU_CHANNEL_PART, domains = bancho)
-async def channelPart(conn: Connection, p: Union[Player, bool]) -> bytes:
-    # get out of channel
     conn.set_status(200)
-    body = b''
-    if not p:
-        body += packets.notification('Server restarting!') 
-        body += packets.systemRestart()
-        conn.set_body(body)
-        return conn.response
-    
+    conn.set_body(b'')
+    return conn
+
+@s.handler(PacketIDS.OSU_CHANNEL_PART)
+async def channelPart(conn: Connection, p: Player) -> bytes: 
     channelname = packets.read_packet(conn.request['body'], 'string')
-    body += packets.channelKick(channelname)
-    
-    conn.set_body(body)
-    return conn.response
-
-@s.handler(target = PacketIDS.OSU_REQUEST_STATUS_UPDATE, domains = bancho)
-async def statusUpdate(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_status(200)
+    conn.set_body(packets.channelKick(channelname))
+    return conn
+
+@s.handler(PacketIDS.OSU_REQUEST_STATUS_UPDATE)
+async def statusUpdate(conn: Connection, p: Player) -> bytes:
     body = b''
-    if not p:
-        body += packets.notification('Server restarting!') 
-        body += packets.systemRestart()
-        conn.set_body(body)
-        return conn.response
-    if p.enqueue:
-        for x in p.enqueue:
-            body += x
-        p.enqueue = []
-        
-    for player in cache.online:
-        player = cache.online[player]
+    
+    for player in cache.online.values():
         if player.userid != p.userid:
             body += packets.userStats(player)
+            body += packets.userPresence(player)
     
-    conn.set_body(body)
-    return conn.response
-
-@s.handler(target = PacketIDS.OSU_USER_STATS_REQUEST, domains = bancho)
-async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_status(200)
-    body = b''
-    if not p:
-        body += packets.notification('Server restarting!') 
-        body += packets.systemRestart()
-        conn.set_body(body)
-        return conn.response
-    if p.enqueue:
-        for x in p.enqueue:
-            body += x
-        p.enqueue = []
+    conn.set_body(body)
+    return conn
 
+@s.handler(PacketIDS.OSU_USER_STATS_REQUEST)
+async def action(conn: Connection, p: Player) -> bytes:
+    body = b''
     userids = packets.read_packet(conn.request['body'], 'list_i32')
-    users = await cache.from_userids(userids)
-    for key in users:
-        player = cache.online[key]
+    users = cache.from_userids(userids)
+    
+    for player in users:
         player.enqueue.append(packets.userStats(player))
-    conn.set_body(body)
-    return conn.response
+        player.enqueue.append(packets.userPresence(player))
 
-@s.handler(target = PacketIDS.OSU_SEND_PRIVATE_MESSAGE, domains = bancho)
-async def privmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
     conn.set_status(200)
-    body = b''
-    if not p:
-        body += packets.notification('Server restarting!') 
-        body += packets.systemRestart()
-        conn.set_body(body)
-        return conn.response
+    conn.set_body(body)
+    return conn
+
+@s.handler(PacketIDS.OSU_SEND_PRIVATE_MESSAGE)
+async def privmsg(conn: Connection, p: Player) -> bytes:
+
     msg = packets.read_packet(conn.request['body'], 'message')
     target = await cache.from_name(msg[2])
+    body = b''
 
     if msg[1].startswith("\x01ACTION"):
         x = regex['beatmap'].search(msg[1])
         p.last_np = int(x['mapid'] or '0')
         if target.userid == 3: # if its the bot
-            m = await oppai(p.last_np, Mods(p.mods).__repr__())
+            m = await oppai(p.last_np, repr(Mods(p.mods)))
             body += packets.sendMessage(
                 target.username, m, p.username, target.userid
             )
@@ -802,39 +742,25 @@ async def privmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
             p.username, msg[1], msg[2], p.userid
         ))
         conn.set_body(body)
-        return conn.response
+        return conn
     
     if msg[1].startswith(config.prefix):
-        if not (x := await process_cmd(msg[1], p)):
-            body += b''
-        else:
+        if (x := await process_cmd(msg[1], p)):
             body += packets.sendMessage(
                 target.username, x, p.username, target.userid
             )
     
+    conn.set_status(200)
     conn.set_body(body)
-    return conn.response
+    return conn
 
-@s.handler(target = PacketIDS.OSU_SEND_PUBLIC_MESSAGE, domains = bancho)
-async def publicmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
-    conn.set_status(200)
-    body = b''
-    if not p:
-        body += packets.notification('Server restarting!') 
-        body += packets.systemRestart()
-        conn.set_body(body)
-        return conn.response
-
-    # 0: client
-    # 1: msg
-    # 2: target
-    # 3: client_id
+@s.handler(PacketIDS.OSU_SEND_PUBLIC_MESSAGE)
+async def publicmsg(conn: Connection, p: Player) -> bytes:
+    
     msg = packets.read_packet(conn.request['body'], 'message')
-    conn.set_status(200)
-    for key in cache.online:
-        if key == p.userid:
+    for client in cache.online.values():
+        if client.userid == p.userid:
             continue
-        client = cache.online[key]
 
         client.enqueue.append(packets.sendMessage(p.username, msg[1], msg[2], p.userid))
     
@@ -842,30 +768,14 @@ async def publicmsg(conn: Connection, p: Union[Player, bool]) -> bytes:
         x = regex['beatmap'].search(msg[1])
         p.last_np = int(x['mapid'])
 
-    conn.set_body(body)
-    return conn.response
+    conn.set_status(200)
+    conn.set_body(b'')
+    return conn
 
-@s.handler(target = PacketIDS.OSU_CHANGE_ACTION, domains = bancho)
-async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
-    # action: 'unB'
-    # info_text: string
-    # map_md5: string
-    # mods: 'unI'
-    # mode: 'unB'
-    # map_id: 'int'
+@s.handler(PacketIDS.OSU_CHANGE_ACTION)
+async def action(conn: Connection, p: Player) -> bytes:
     
     conn.set_status(200)
-    body = b''
-    if not p:
-        body += packets.notification('Server restarting!') 
-        body += packets.systemRestart()
-        conn.set_body(body)
-        return conn.response
-    if p.enqueue:
-        for x in p.enqueue:
-            body += x
-        p.enqueue = []
-    
     actions = packets.read_packet(conn.request['body'], 'action')
     p.action = actions['action']
     p.info_text = actions['info_text']
@@ -876,12 +786,11 @@ async def action(conn: Connection, p: Union[Player, bool]) -> bytes:
     
     p.enqueue.append(packets.userStats(p))
 
-    conn.set_body(body)
-    return conn.response
+    conn.set_body(b'')
+    return conn
 
-@s.handler(target = PacketIDS.OSU_CHANNEL_JOIN, domains = bancho)
-async def channelJoin(conn: Connection, p: Union[Player, bool]) -> bytes:
-    # kinda broken
+@s.handler(PacketIDS.OSU_CHANNEL_JOIN)
+async def channelJoin(conn: Connection, p: Player) -> bytes:
     channelName = packets.read_packet(conn.request['body'], 'channelJoin')
     if not (x := await cache.get_channel_from_name(channelName)):
         conn.set_status(404)
@@ -893,22 +802,28 @@ async def channelJoin(conn: Connection, p: Union[Player, bool]) -> bytes:
         body += packets.channelInfo(x[0], x[1], x[2])
 
     conn.set_body(body)
-    return conn.response
+    return conn
 
-@s.handler(target = r'^/d/(?P<setid>[0-9]*)$', domains = web)
-@lru_cache(maxsize=None)
+@s.handler(re.compile(r'^/d/(?P<setid>[0-9]*)$'))
 async def download(conn: Connection) -> bytes:
+    # TODO: handle if the map gets changed? or something
     conn.set_status(200)
     setid = int(conn.args['setid'])
-    async with aiohttp.request('GET', f'{config.mirror}/b/{setid}') as req:
-        if not req or req.status != 200:
-            conn.set_body(b"can't retrive map")
-            return conn.response
-        
-        conn.set_body(await req.content.read())
-    return conn.response
+    if setid not in cache.direct:
+        async with aiohttp.request('GET', f'{config.mirror}/b/{setid}') as req:
+            if not req or req.status != 200:
+                conn.set_body(b"can't retrive map")
+                return conn
+            
+            data = await req.content.read()
+            cache.direct[setid] = data
+            conn.set_body(data)
+    else:
+        conn.set_body(cache.direct[setid])
 
-@s.handler(target = r'^/(?P<userid>[0-9]*)$', domains = avatar)
+    return conn
+
+@s.handler(re.compile(r'^/(?P<userid>[0-9]*)$'), 'a.ppy.sh')
 @lru_cache(maxsize=None)
 async def ava(conn: Connection) -> bytes:
     conn.set_status(200)
@@ -922,52 +837,38 @@ async def ava(conn: Connection) -> bytes:
             pfp = f.read()
     
     conn.set_body(pfp)
-    return conn.response
+    return conn
 
-@s.handler(target = PacketIDS.OSU_PING, domains = bancho)
-async def pong(conn: Connection, p: Union[Player, bool]) -> bytes:
+@s.handler(PacketIDS.OSU_PING)
+async def pong(conn: Connection, p: Player) -> bytes:
+    p.pingtime = time.time()
     conn.set_status(200)
-    body = b''
-    if not p:
-        body += packets.notification('Server restarting!') 
-        body += packets.systemRestart()
-        conn.set_body(body)
-        return conn.response
-    if p.enqueue:
-        for x in p.enqueue:
-            body += x
-        p.enqueue = []
-    conn.set_body(body)
-    return conn.response
+    conn.set_body(b'')
+    return conn
 
-@s.handler(target = PacketIDS.OSU_LOGOUT, domains = bancho)
-async def logout(conn: Connection, p: Union[Player, bool]) -> bytes:
+@s.handler(PacketIDS.OSU_LOGOUT)
+async def logout(conn: Connection, p: Player) -> bytes:
     conn.set_status(200)
-    if p:
-        if (time.time() - p.loginTime) < 3:
-            return b''
-        del cache.online[p.userid]
-        conn.set_body(packets.logout(p.userid))
-        printc(f'{p.username} has logged out!', Colors.Blue)
-    return conn.response
+    conn.set_body(b'')
+    if time.time() - p.loginTime < 2:
+        return conn
+    
+    for player in cache.online.values():
+        player.enqueue.append(packets.logout(player.userid))
+    del cache.online[p.userid]
+    
+    return conn
 
-@s.handler(target = 'banchologin', domains = bancho)
+@s.handler('login')
 async def login(conn: Connection) -> bytes:
     body = b''
     userid = -1
-    # Getting all credentials details
+    conn.set_status(200)
     credentials = conn.request['body'].decode().replace('\n', '|').split('|', 5)
     credentials[2] = float(credentials[2][1:])
     credentials[5] = credentials[5].replace('|', ':').split(':')
 
-    # 0 username
-    # 1 password (hashed in md5)
-    # 2 game version
-    # 3 ?
-    # 4 ?
-    # 5 hardware data
-
-    async with AIOTinyDB('./data/users.json') as DB:
+    async with AIOTinyDB(config.user_path) as DB:
         x = DB.get(lambda x: True if x['username'] == credentials[0] else False)
         if not x:
             pass
@@ -975,63 +876,59 @@ async def login(conn: Connection) -> bytes:
             userid = x['userid']
         
     if userid < 0:
-        conn.set_status(200)
         conn.add_header('cho-token', userid)
         body += packets.userID(userid)
         conn.set_body(body)   
-        return conn.response
+        return conn
         
     if userid in cache.online:
-        userid = -1
-        body += packets.userID(userid)
-        body += packets.notification("Your account is already logged in from somewhere else!")
-    else:    
-        body += packets.userID(userid)
-        
-        p = Player(
-            userid, credentials[2], credentials[5], time.time()
-        )
-        await p.update()
-        
-        body += packets.menuIcon('|'.join(config.menuicon))
-        body += packets.notification(loginMsg.format(len(cache.online) + 1))
-        body += packets.protocolVersion()
-        body += packets.banchoPrivs(p)
-        body += packets.userStats(p)
-        body += packets.userPresence(p)
-        body += packets.channelStart()
-        
-        for c in cache.channels:
-            if not p.privileges & c[3]: 
-                continue
-            
-            if c[0] == 'lobby':
-                continue
-
-            body += packets.channelJoin(c[0])
-            body += packets.channelInfo(c[0], c[1], c[2])
-        
-        body += packets.userStats(p)
-        for x in cache.online:
-            x = cache.online[x]
-            if x.userid != 3: # bot
-                x.enqueue.append(packets.userStats(p))
-            if x.userid != p.userid:
-                body += packets.userPresence(x) + packets.userStats(x)
-        cache.online[userid] = p
-        printc(f'{p.username} has logged in!', Colors.Blue)
+        conn.add_header('cho-token', -1)
+        body += packets.userID(-1) + packets.notification('User is already logged in!')
+        conn.set_body(body)   
+        return conn
+       
+    body += packets.userID(userid)
+    
+    p = Player(
+        userid, credentials[2], credentials[5], time.time()
+    )
+    await p.update()
+    
+    body += packets.menuIcon('|'.join(config.menuicon))
+    body += packets.notification(loginMsg.format(len(cache.online) + 1))
+    body += packets.protocolVersion()
+    body += packets.banchoPrivs(p)
+    body += packets.userStats(p)
+    body += packets.userPresence(p)
+    body += packets.channelStart()
+    
+    for c in cache.channels:
+        if not p.privileges & c[3]: 
+            continue
+        body += packets.channelJoin(c[0])
+        body += packets.channelInfo(c[0], c[1], c[2])
+    
+    for other_p in cache.online.values():
+        if other_p.userid != 3: 
+            other_p.enqueue.append(packets.userStats(p))
+            other_p.enqueue.append(packets.userPresence(p))
+        if other_p.userid != p.userid:
+            body += packets.userPresence(other_p) + packets.userStats(other_p)
+    
+    cache.online[userid] = p
+    printc(f'{p.username} has logged in!', Colors.Blue)
 
     
-    conn.set_status(200)
     conn.add_header('cho-token', userid)
     conn.set_body(body)
-    return conn.response
+    return conn
 
-def run(socket_type: Union[str, tuple] = ("127.0.0.1", 5000)):
+def run(socket_type: Union[str, tuple] = ("127.0.0.1", 5000), **kwargs):
     # BEFORE we run the server we want to add our
     # bot object so we the user logins, they see the bot
-    bot = Player(3, 20201229.2, ['bot'], time.time())
+    bot = Player(3, 20201229.2, ['bot'], 0.0)
     bot.action = Action.Afk
     bot.username = 'Lamp'
+    bot.stats.rank = 727
     cache.online[3] = bot
-    s.run(socket_type)
+    s.run(socket_type, **kwargs)

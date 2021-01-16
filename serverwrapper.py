@@ -1,53 +1,64 @@
 from typing import Union, Callable
 from WebLamp import Lamp, Connection
-from WebLamp.utlies import printc, Colors
+from WebLamp.utlies import printc as log, Colors
 from packets import PacketIDS
+import packets
+import re
 
 class OsuServer:
     def __init__(self) -> None:
         self.server = Lamp()
         self.handlers = {}
     
-    def handler(self, target: Union[str, PacketIDS], 
-                domains: Union[tuple, list], 
-                method: list = []) -> Callable:
+    def handler(self, target: Union[str, PacketIDS, re.Pattern], 
+                domain: Union[str, re.Pattern] = 'osu.ppy.sh'):
         def inner(func):
-            
-            if not isinstance(target, str) or target == 'banchologin':
-                self.handlers[target] = func
+            self.handlers[target] = func
 
-            p = target if isinstance(target, str) else '/'
-            if isinstance(target, str) and target != 'banchologin':
-                for domain in domains:
-                    @self.server.route(route = p, domain = domain, method = method)
-                    async def ff(conn: Connection) -> bytes:
-                        return await func(conn)
+            if isinstance(target, PacketIDS):
+                @self.server.route('/', re.compile(r'^c([4-6e])\.ppy\.sh$'))
+                async def bancho(conn: Connection) -> bytes:
+                    if 'osu-token' not in conn.request:
+                        l = await self.handlers['login'](conn)
+                        return l.response
+
+                    from cache import online
+                    if (userid := int(conn.request['osu-token'])) not in online:
+                        conn.set_status(200)
+                        body = b''
+                        body += packets.systemRestart()
+                        body += packets.notification('Server is restarting!')
+                        conn.set_body(body)
+                        return conn.response
+
+                    p = online[userid]
+                    body = b''
+                    packetid = PacketIDS(conn.request['body'][0])
+                    conn = await self.handlers[packetid](conn, p)
+                    del conn._response[1]
+                    conn._response.insert(1, '')
+                    body += conn._response[3]
+                    if p.enqueue:
+                        for data in p.enqueue:
+                            body += data
+                    conn.set_body(body)
+                    return conn.response
+                    
+            elif domain == 'a.ppy.sh':
+                @self.server.route(target, domain)
+                async def ava(conn: Connection) -> bytes:
+                    a = await func(conn)
+                    return a.response
             else:
-                for domain in domains:
-                    @self.server.route(route = '/', domain = domain, method = method)
-                    async def ff(conn: Connection) -> bytes:
-                        if 'osu-token' not in conn.request:
-                            f = self.handlers['banchologin']
-                            return await f(conn)
-                        else:
-                            t = PacketIDS(conn.request['body'][0]) # read first byte in body
-                            printc(t.name, Colors.Green)
-                            if t not in self.handlers:
-                                printc(f'Unhandled Request: {t.name}', Colors.Red)
-                                return b'error: :c'
-                            else:
-                                f = self.handlers[t] # get handler for packet
-
-                            from cache import online
-                            userid = int(conn.request['osu-token'])
-                            if userid not in online:
-                                player = None
-                            else:
-                                player = online[userid]
-                            return await f(conn, player)
+                @self.server.route(target, domain)
+                async def web(conn: Connection) -> bytes:
+                    # TODO: extra checks if the user is online or server
+                    # restarted
+                    w = await func(conn)
+                    return w.response
 
             return func
         return inner
 
-    def run(self, socket_type: Union[str, tuple] = ("127.0.0.1", 5000)) -> None:
-        self.server.run(socket_type)
+    def run(self, socket_type: Union[str, tuple] = ("127.0.0.1", 5000), **kwargs) -> None:
+        self.server.run(socket_type, **kwargs)

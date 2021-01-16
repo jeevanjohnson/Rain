@@ -38,6 +38,7 @@ class Player:
         self.max_combo = 0
         self.last_play: Score = None
         self.friends: list[int] = []
+        self.pingtime: float = None
 
         self.enqueue = [] # this is when the client wants to get other player's info or whatever
 

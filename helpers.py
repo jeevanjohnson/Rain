@@ -1,5 +1,5 @@
-from aiotinydb import AIOTinyDB
 from typing import TYPE_CHECKING, Union
+from aiotinydb import AIOTinyDB
 import requests
 import time
 

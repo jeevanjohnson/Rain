@@ -1,5 +1,5 @@
-from typing import Union
 from objects.const import Privileges
+from typing import Union
 
 online = {}
 beatmap = {}
@@ -20,17 +20,11 @@ async def get_channel_from_name(name: str):
 
 async def from_name(username: str):
     """users"""
-    for key in online:
-        if (p := online[key]).username == username:
+    for p in online.values():
+        if p.username == username:
             return p
     
     return None
 
-async def from_userids(ids: Union[list, tuple]) -> dict:
-    """users"""
-    x = {}
-    for key in online:
-        if key in ids:
-            x[key] = online[key]
-        
-    return x
+def from_userids(ids: Union[list, tuple]) -> dict: 
+    return [p for p in online.values() if p.userid in ids]

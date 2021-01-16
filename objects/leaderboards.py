@@ -2,11 +2,8 @@ from helpers import remove_duplicates
 from objects.player import Player
 from objects.const import Mods
 from aiotinydb import AIOTinyDB
+import config
 import os
-
-USERS = './data/users.json'
-BEATMAPS = './data/beatmaps.json'
-SCORES = './data/scores.json'
 
 """
 rankedstatus|false|beatmapid|setid|howmanyscoresonthemap \n
@@ -37,17 +34,18 @@ class Leaderboard:
         self.mods: Mods = None
         self.userids: tuple = None
         self.user: Player = None
+        self.country: str = None
     
     async def formatLB(self, Skey, scoring):
         def check(s):
             if Skey(s) and s['userid'] == self.user.userid:
                 return True
         md5 = self.md5
-        async with AIOTinyDB(BEATMAPS) as db:
+        async with AIOTinyDB(config.beatamp_path) as db:
             beatmap = db.get(lambda x: True if x['md5'] == md5 else False)
             if not beatmap:
                 return
-        async with AIOTinyDB(SCORES) as db:
+        async with AIOTinyDB(config.scores_path) as db:
             scores = db.search(Skey)
             if not scores: # no scores found
                 return
