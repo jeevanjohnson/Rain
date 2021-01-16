@@ -1,5 +1,10 @@
 from objects.const import Privileges
 from typing import Union
+import aiohttp
+
+async def loadclient():
+    global client
+    client = aiohttp.ClientSession()
 
 online = {}
 beatmap = {}

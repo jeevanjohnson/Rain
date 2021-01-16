@@ -10,7 +10,6 @@ from packets import PacketIDS
 from const import process_cmd
 from objects.const import *
 from helpers import *
-import asyncio
 import aiohttp
 import packets
 import hashlib 
@@ -151,7 +150,7 @@ async def accountCreation(conn: Connection) -> bytes:
                         'max_combo': 0, 
                     }
                 })
-        printc(f'{username} has registered an account!', Colors.Blue)
+        printc(f'{username} has registered an account.', Colors.Blue)
     
     conn.set_status(200)
     conn.set_body(b'ok')
@@ -614,7 +613,7 @@ async def direct(conn: Connection) -> bytes:
 
     params['s'] = RankedStatus.to_api(int(args['r']))
 
-    async with aiohttp.request('GET', url, params = params) as req:
+    async with cache.client.get(url, params = params) as req:
         if not req or req.status != 200 or not (r := await req.json()):
             return b"Failed to find maps!"
 
@@ -810,7 +809,7 @@ async def download(conn: Connection) -> bytes:
     conn.set_status(200)
     setid = int(conn.args['setid'])
     if setid not in cache.direct:
-        async with aiohttp.request('GET', f'{config.mirror}/b/{setid}') as req:
+        async with cache.client.get(f'{config.mirror}/b/{setid}') as req:
             if not req or req.status != 200:
                 conn.set_body(b"can't retrive map")
                 return conn
@@ -916,8 +915,7 @@ async def login(conn: Connection) -> bytes:
             body += packets.userPresence(other_p) + packets.userStats(other_p)
     
     cache.online[userid] = p
-    printc(f'{p.username} has logged in!', Colors.Blue)
-
+    printc(f'{p.username} has logged in.', Colors.Blue)
     
     conn.add_header('cho-token', userid)
     conn.set_body(body)
@@ -929,6 +927,6 @@ def run(socket_type: Union[str, tuple] = ("127.0.0.1", 5000), **kwargs):
     bot = Player(3, 20201229.2, ['bot'], 0.0)
     bot.action = Action.Afk
     bot.username = 'Lamp'
-    bot.stats.rank = 727
+    bot.stats.rank = 0
     cache.online[3] = bot
     s.run(socket_type, **kwargs)

@@ -1,6 +1,6 @@
-from aiotinydb import AIOTinyDB
 from objects.const import ServerRankedStatus
-from aiohttp import request
+from aiotinydb import AIOTinyDB
+import cache
 import config
 
 class Beatmap:
@@ -37,7 +37,7 @@ class Beatmap:
         b = Beatmap()
         params = {'k': config.api_keys['osu'], 's': setid}
         url = 'https://old.ppy.sh/api/get_beatmaps'
-        async with request('GET', url, params = params) as req:
+        async with cache.client.get(url, params = params) as req:
             if not req or req.status != 200 or not (r := await req.json()):
                 return None
 
@@ -62,7 +62,7 @@ class Beatmap:
             b.ar = float(bmap['diff_approach'])
 
             url = f"https://old.ppy.sh/osu/{b.mapid}"
-            async with request('GET', url) as req:
+            async with cache.client.get(url, params = params) as req:
                 if not req or req.status != 200 or not (r := await req.content.read()):
                     return None
 
@@ -79,7 +79,7 @@ class Beatmap:
         b = Beatmap()
         params = {'k': config.api_keys['osu'], 'h': md5}
         url = 'https://old.ppy.sh/api/get_beatmaps'
-        async with request('GET', url, params = params) as req:
+        async with cache.client.get(url, params = params) as req:
             if not req or req.status != 200 or not (r := await req.json()):
                 return None
 
@@ -105,7 +105,7 @@ class Beatmap:
         b.ar = float(bmap['diff_approach'])
 
         url = f"https://old.ppy.sh/osu/{b.mapid}"
-        async with request('GET', url) as req:
+        async with cache.client.get(url, params = params) as req:
             if not req or req.status != 200 or not (r := await req.content.read()):
                 return None
 

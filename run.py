@@ -1,9 +1,9 @@
 from WebLamp import printc as log, Colors
-from cache import online
 from server import run
 import asyncio
 import shutil
 import config
+import cache
 import time
 import os
 
@@ -29,15 +29,15 @@ async def inactive():
     """
     while True:
         await asyncio.sleep(10)
-        for p in list(online):
-            p = online[p]
+        for p in list(cache.online):
+            p = cache.online[p]
             if p.userid == 3:
                 continue
             
             if p.pingtime and time.time() - p.pingtime > PING_TIMEOUT:
                 log(f'{p.username} has logged off!', Colors.Blue)
-                del online[p.userid]
+                del cache.online[p.userid]
 
 run(
-    config.socket_type, uvloop = True, tasks = [inactive]
+    config.socket_type, uvloop = True, tasks = [inactive, cache.loadclient]
 )
