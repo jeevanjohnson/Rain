@@ -10,14 +10,13 @@ If your actually going for a server that wants to be an actual server like akats
 
 # TODO
 ```
-Clean up score sub
-Finish web and bancho handlers
+Finish web and bancho handlers & clean up the handlers in general as well
 At some point seprate web/ava/bancho handlers in different files
 Add more protection to the server
 Add some sort of anti cheat/multi account detection
 Efficient bancho ranking simulation
 Better docs for people who are newer to coding
-Apply another language like Cython into the bancho in someway
+Apply another language like Cython into the bancho in some way
 ```
 
 # Motivations
