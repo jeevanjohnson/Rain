@@ -36,6 +36,31 @@ loginMsg = '\n'.join([
     "There are currently {} online users"
 ])
 
+@s.handler(re.compile(r'^\/ss\/(?P<id>[0-9]*)(|\.png)$'), domain = 'osu.ppy.sh')
+async def get_ss(conn: Connection) -> Connection:
+    img_id = int(conn.args['id'])
+    if os.path.exists(f'./data/screenshots/{img_id}.png'):
+        conn.set_status(200)
+        with open(f'./data/screenshots/{img_id}.png', 'rb') as f:
+            conn.set_body(f.read())
+    else:
+        conn.set_status(404)
+        conn.set_body('Image not found!')
+    
+    return conn.response
+
+@s.handler('/web/osu-screenshot.php')
+async def screenshots(conn: Connection) -> Connection:
+    part = conn.request['multipart'].data
+    screenshot = part[3][2]
+    dirs = len(os.listdir('./data/screenshots/')) + 1
+    with open(f'./data/screenshots/{dirs}.png', 'wb') as f:
+        f.write(screenshot)
+
+    conn.set_status(200)
+    conn.set_body(f'http://osu.ppy.sh/ss/{dirs}'.encode())
+    return conn
+
 @s.handler('/users')
 async def accountCreation(conn: Connection) -> bytes:
     errors = {
@@ -365,6 +390,8 @@ async def scoreSub(conn: Connection) -> bytes:
             f.write(
                 m[12][2]
             )
+        
+        print()
 
         conn.set_body(b'error: no')
         return conn
@@ -505,75 +532,80 @@ async def leaderboard(conn: Connection) -> bytes:
         await p.update()
         p.enqueue.append(packets.userStats(p))
     
-    lb = []
-    async with AIOTinyDB(config.beatamp_path) as DB:
-        if map_md5 in cache.beatmap:
-            m = cache.beatmap[map_md5]
-            lb.append(f'{m["rankedstatus"]}|false')
-        elif (m := DB.get(lambda bmap: True if bmap['md5'] == map_md5 else False)) and \
-        os.path.exists(f'./data/beatmaps/{filename}'):
-            lb.append(f'{m["rankedstatus"]}|false')
-            cache.beatmap[map_md5] = m
-        elif (m := await Beatmap.from_md5(map_md5)):
-            lb.append(f'{m.rankedstatus}|false')
-            cache.beatmap[map_md5] = m.__dict__
-            DB.insert(m.__dict__)
-        elif os.path.exists(f'./data/beatmaps/{filename}'):
-            lb.append(f'{ServerRankedStatus.UpdateAvailable}|false')
-        else:
-            lb.append(f'{ServerRankedStatus.NotSubmitted}|false')
-    
-    leader = Leaderboard()
-    leader.md5 = map_md5
-    leader.user = p
-    leader.mods = mods
-    if mods & Mods.RELAX or mods & Mods.AUTOPILOT:
-        if mods & Mods.RELAX:
-            x = Mods.RELAX
-        else:
-            x = Mods.AUTOPILOT
-        cond = lambda score: score['pp']
-        Skey = lambda score: bool(
-            score['map_md5'] == map_md5 and 
-            score['passed'] and
-            GameMode(score['mode']) == mode and
-            Mods(score['mods']) & x and
-            ScoreStatus(score['sub_type']) == ScoreStatus.SUBMITTED
-        )
+    if map_md5 in cache.leaderboards and 'update' not in cache.leaderboards[map_md5]:
+        lb = leader = cache.leaderboards[map_md5]
     else:
-        cond = lambda score: score['pp']
-        Skey = lambda score: bool(
-            score['map_md5'] == map_md5 and 
-            score['passed'] and
-            GameMode(score['mode']) == mode and
-            not Mods(score['mods']) & Mods.RELAX and
-            not Mods(score['mods']) & Mods.AUTOPILOT and
-            ScoreStatus(score['sub_type']) == ScoreStatus.SUBMITTED
-        )
-    
-    if rank_type == RankingType.Top:
-        await leader.formatLB(Skey, cond)
-    elif rank_type == RankingType.Mods:
+        lb = []
+        async with AIOTinyDB(config.beatamp_path) as DB:
+            if map_md5 in cache.beatmap:
+                m = cache.beatmap[map_md5]
+                lb.append(f'{m["rankedstatus"]}|false')
+            elif (m := DB.get(lambda bmap: True if bmap['md5'] == map_md5 else False)) and \
+            os.path.exists(f'./data/beatmaps/{filename}'):
+                lb.append(f'{m["rankedstatus"]}|false')
+                cache.beatmap[map_md5] = m
+            elif (m := await Beatmap.from_md5(map_md5)):
+                lb.append(f'{m.rankedstatus}|false')
+                cache.beatmap[map_md5] = m.__dict__
+                DB.insert(m.__dict__)
+            elif os.path.exists(f'./data/beatmaps/{filename}'):
+                lb.append(f'{ServerRankedStatus.UpdateAvailable}|false')
+            else:
+                lb.append(f'{ServerRankedStatus.NotSubmitted}|false')
+        
+        leader = Leaderboard()
+        leader.md5 = map_md5
+        leader.user = p
         leader.mods = mods
-        Skey = lambda score: bool(
-            score['map_md5'] == map_md5 and 
-            score['passed'] and
-            GameMode(score['mode']) == mode and
-            Mods(score['mods']) == leader.mods and
-            ScoreStatus(score['sub_type']) == ScoreStatus.SUBMITTED
-        )
-        await leader.formatLB(Skey, cond)
-    elif rank_type == RankingType.Friends:
-        leader.userids = tuple(p.friends)
-        await leader.formatLB(Skey, cond)
-    elif rank_type == RankingType.Country:
-        leader.country = p.country[1]
-        await leader.formatLB(Skey, cond)
+        if mods & Mods.RELAX or mods & Mods.AUTOPILOT:
+            if mods & Mods.RELAX:
+                x = Mods.RELAX
+            else:
+                x = Mods.AUTOPILOT
+            cond = lambda score: score['pp']
+            Skey = lambda score: bool(
+                score['map_md5'] == map_md5 and 
+                score['passed'] and
+                GameMode(score['mode']) == mode and
+                Mods(score['mods']) & x and
+                ScoreStatus(score['sub_type']) == ScoreStatus.SUBMITTED
+            )
+        else:
+            cond = lambda score: score['pp']
+            Skey = lambda score: bool(
+                score['map_md5'] == map_md5 and 
+                score['passed'] and
+                GameMode(score['mode']) == mode and
+                not Mods(score['mods']) & Mods.RELAX and
+                not Mods(score['mods']) & Mods.AUTOPILOT and
+                ScoreStatus(score['sub_type']) == ScoreStatus.SUBMITTED
+            )
+        
+        if rank_type == RankingType.Top:
+            await leader.formatLB(Skey, cond)
+        elif rank_type == RankingType.Mods:
+            leader.mods = mods
+            Skey = lambda score: bool(
+                score['map_md5'] == map_md5 and 
+                score['passed'] and
+                GameMode(score['mode']) == mode and
+                Mods(score['mods']) == leader.mods and
+                ScoreStatus(score['sub_type']) == ScoreStatus.SUBMITTED
+            )
+            await leader.formatLB(Skey, cond)
+        elif rank_type == RankingType.Friends:
+            leader.userids = tuple(p.friends)
+            await leader.formatLB(Skey, cond)
+        elif rank_type == RankingType.Country:
+            leader.country = p.country[1]
+            await leader.formatLB(Skey, cond)
     
-    if len(leader.lb) < 5:
+    if leader is not Leaderboard:
+        cache.leaderboards[map_md5] = lb
         conn.set_body('\n'.join(lb).encode())
         return conn
     else:
+        cache.leaderboards[map_md5] = leader
         conn.set_body(repr(leader).encode())
         return conn
 
@@ -613,7 +645,7 @@ async def direct(conn: Connection) -> bytes:
 
     params['s'] = RankedStatus.to_api(int(args['r']))
 
-    async with cache.client.get(url, params = params) as req:
+    async with aiohttp.request('GET', url, params = params) as req:
         if not req or req.status != 200 or not (r := await req.json()):
             return b"Failed to find maps!"
 
@@ -630,6 +662,7 @@ async def direct(conn: Connection) -> bytes:
             )
 
         diffs = ','.join(diffs)
+        bmap['status'] = ServerRankedStatus.from_beatconnect(bmap['status'])
         maps.append(
             '{id}.osz|{artist}|{title}|{creator}|'
             '{ranked}|10.0|{last_updated}|{id}|'
@@ -710,6 +743,8 @@ async def statusUpdate(conn: Connection, p: Player) -> bytes:
 async def action(conn: Connection, p: Player) -> bytes:
     body = b''
     userids = packets.read_packet(conn.request['body'], 'list_i32')
+    userids = list(userids)
+    userids.remove(p.userid)
     users = cache.from_userids(userids)
     
     for player in users:
@@ -744,7 +779,7 @@ async def privmsg(conn: Connection, p: Player) -> bytes:
         return conn
     
     if msg[1].startswith(config.prefix):
-        if (x := await process_cmd(msg[1], p)):
+        if (x := await process_cmd(msg[1], p, MsgStatus.Private)):
             body += packets.sendMessage(
                 target.username, x, p.username, target.userid
             )
@@ -757,9 +792,30 @@ async def privmsg(conn: Connection, p: Player) -> bytes:
 async def publicmsg(conn: Connection, p: Player) -> bytes:
     
     msg = packets.read_packet(conn.request['body'], 'message')
+    body = b''
+    
     for client in cache.online.values():
         if client.userid == p.userid:
             continue
+    
+        if client.userid == 3: # if its a bot
+            
+            if msg[1].startswith(config.prefix):
+                if (x := await process_cmd(msg[1], p, MsgStatus.Public)):
+                    body += packets.sendMessage(
+                        client.username, x, msg[2], client.userid
+                    )
+            
+            if msg[1].startswith("\x01ACTION"):
+                x = regex['beatmap'].search(msg[1])
+                p.last_np = int(x['mapid'] or '0')
+                if client.userid == 3: # if its the bot
+                    m = await oppai(p.last_np, repr(Mods(p.mods)))
+                    body += packets.sendMessage(
+                        client.username, m, msg[2], client.userid
+                    )
+                
+                continue
 
         client.enqueue.append(packets.sendMessage(p.username, msg[1], msg[2], p.userid))
     
@@ -768,7 +824,7 @@ async def publicmsg(conn: Connection, p: Player) -> bytes:
         p.last_np = int(x['mapid'])
 
     conn.set_status(200)
-    conn.set_body(b'')
+    conn.set_body(body)
     return conn
 
 @s.handler(PacketIDS.OSU_CHANGE_ACTION)
@@ -783,7 +839,8 @@ async def action(conn: Connection, p: Player) -> bytes:
     p.mode = actions['mode']
     p.map_id = actions['map_id']
     
-    p.enqueue.append(packets.userStats(p))
+    for player in cache.online.values():
+        player.enqueue.append(packets.userStats(p))
 
     conn.set_body(b'')
     return conn
@@ -809,7 +866,7 @@ async def download(conn: Connection) -> bytes:
     conn.set_status(200)
     setid = int(conn.args['setid'])
     if setid not in cache.direct:
-        async with cache.client.get(f'{config.mirror}/b/{setid}') as req:
+        async with aiohttp.request('GET', f'{config.mirror}/b/{setid}') as req:
             if not req or req.status != 200:
                 conn.set_body(b"can't retrive map")
                 return conn
@@ -853,7 +910,9 @@ async def logout(conn: Connection, p: Player) -> bytes:
         return conn
     
     for player in cache.online.values():
-        player.enqueue.append(packets.logout(player.userid))
+        if p.userid in player.friends: 
+            player.enqueue.append(packets.logout(player.userid))
+    
     del cache.online[p.userid]
     
     return conn

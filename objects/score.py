@@ -1,10 +1,11 @@
+from objects.const import Mods, ScoreStatus, GameMode, DICT_TO_CLASS
+from py3rijndael import RijndaelCbc, ZeroPadding
+from subprocess import run, PIPE
+from aiotinydb import AIOTinyDB
 from base64 import b64decode
 from typing import Union
-from aiotinydb import AIOTinyDB
-from py3rijndael import RijndaelCbc, ZeroPadding
-from objects.const import Mods, ScoreStatus, GameMode, DICT_TO_CLASS
-from subprocess import run, PIPE
 from json import loads
+import config
 import time
 import os
 

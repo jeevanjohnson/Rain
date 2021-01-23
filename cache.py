@@ -1,14 +1,10 @@
 from objects.const import Privileges
 from typing import Union
-import aiohttp
-
-async def loadclient():
-    global client
-    client = aiohttp.ClientSession()
 
 online = {}
 beatmap = {}
 direct = {}
+leaderboards = {}
 channels = [  
     # '#name', 'description', 1 player count, what prives you need to see and write | privs
     ('#osu', 'general osu!chat', 0, Privileges.Normal), 

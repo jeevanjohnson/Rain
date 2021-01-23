@@ -6,21 +6,6 @@ import time
 if TYPE_CHECKING:
     from objects.score import Score
 
-def request_bancho_pp(pp: int, key: str, mode: int) -> dict:
-    time.sleep(0.71) # kinda forced to do this :/
-    url = f'https://osudaily.net/api/pp'
-    params = {
-        'k': key,
-        't': 'pp',
-        'v': pp or 1,
-        'm': int(mode)
-    }
-    req =  requests.get(url = url, params = params)
-    if not req or req.status_code != 200:
-        return # shouldn't happen
-
-    return req.json()
-
 def is_best_score(score: 'Score'):
     ...
 

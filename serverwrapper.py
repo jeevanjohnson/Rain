@@ -1,6 +1,7 @@
 from typing import Union, Callable
 from WebLamp import Lamp, Connection
 from WebLamp.utlies import printc as log, Colors
+import os
 from packets import PacketIDS
 import packets
 import time
@@ -38,7 +39,7 @@ class OsuServer:
                     p = online[userid]
                     body = b''
                     packetid = PacketIDS(conn.request['body'][0])
-                    if packetid != PacketIDS.OSU_PING:
+                    if packetid not in (PacketIDS.OSU_PING, PacketIDS.OSU_USER_STATS_REQUEST):
                         ctime = time.time() * 1000
                         log(f'{packetid.name}', Colors.Green)
                     conn = await self.handlers[packetid](conn, p)
@@ -49,7 +50,7 @@ class OsuServer:
                         for data in p.enqueue:
                             body += data
                     conn.set_body(body)
-                    if packetid != PacketIDS.OSU_PING:
+                    if packetid not in (PacketIDS.OSU_PING, PacketIDS.OSU_USER_STATS_REQUEST):
                         log(f'{(time.time() * 1000 - ctime):.2f} ms', Colors.Blue)
                     return conn.response
                     

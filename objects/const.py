@@ -4,6 +4,11 @@ class DICT_TO_CLASS:
     def __init__(self, **entries):
         self.__dict__.update(entries)
 
+class MsgStatus(IntFlag):
+    Public = 0
+    Private = 1
+    Both = 2
+
 @unique
 class ScoreStatus(IntEnum):
 	FAILED = 0
@@ -168,7 +173,23 @@ class ServerRankedStatus(IntEnum):
         return {
             'rank': ServerRankedStatus.Ranked,
             'love': ServerRankedStatus.Loved,
-            'unrank': ServerRankedStatus.Pending
+            'unrank': ServerRankedStatus.Pending,
+            'approve': ServerRankedStatus.Approved
+        }[s]
+    
+    @staticmethod
+    def to_command(s):
+        return {
+            ServerRankedStatus.Ranked: 'ranked',
+            ServerRankedStatus.Loved: 'loved',
+            ServerRankedStatus.Pending: 'unranked',
+            ServerRankedStatus.Approved: 'approved'
+        }[s]
+    
+    @staticmethod
+    def from_beatconnect(s: str):
+        return {
+            'ranked': ServerRankedStatus.Ranked
         }[s]
 
     @staticmethod

@@ -4,8 +4,6 @@ to it being old and i can improve it now
 + its unfinished lmao
 """
 from objects.const import Action, GameMode, Mods
-from config import simulate_bancho_ranks
-from helpers import request_bancho_pp
 from objects.player import Player
 from functools import lru_cache
 from enum import IntEnum
@@ -400,9 +398,9 @@ def userStats(p: 'Player') -> bytes:
         mode = GameMode(0)
     else:
         mode = GameMode(p.mode)
-    if simulate_bancho_ranks[0]:
-        x = request_bancho_pp(p.stats.pp, simulate_bancho_ranks[1], mode)
-        p.stats.rank = x['rank']
+    #if simulate_bancho_ranks[0]:
+    #    x = request_bancho_pp(p.stats.pp, simulate_bancho_ranks[1], mode)
+    #    p.stats.rank = x['rank']
 
     return write(
         PacketIDS.CHO_USER_STATS, 

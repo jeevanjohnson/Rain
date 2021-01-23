@@ -7,6 +7,9 @@ import cache
 import time
 import os
 
+# if x == f'{p}beatmaps': # or x == f'{p}replays':
+#     shutil.rmtree(x)
+
 os.chdir(os.path.dirname(os.path.realpath(__file__))) # sets our director in the console to /rain
 p = './data' 
 
@@ -14,8 +17,6 @@ if not os.path.exists(p):
     os.mkdir(p)
 p += '/'
 for x in (f'{p}replays', f'{p}beatmaps', f'{p}screenshots', f'{p}avatars'):
-    if x == f'{p}beatmaps': # or x == f'{p}replays':
-        shutil.rmtree(x)
     if not os.path.exists(x):
         os.mkdir(x)
         if x == f'{p}avatars': print('Get a default profile picture and save it as "-1.png"')
@@ -39,5 +40,5 @@ async def inactive():
                 del cache.online[p.userid]
 
 run(
-    config.socket_type, uvloop = True, tasks = [inactive, cache.loadclient]
+    config.socket_type, uvloop = True, debug = True, dtasks = [inactive]
 )
